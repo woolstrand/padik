@@ -1,0 +1,23 @@
+{
+  "name": "padik-engine",
+  "version": "1.0.0",
+  "description": "Game engine for Padik — LLM-based textual roleplay game",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "openai": "^6.42.0"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.3",
+    "@types/node": "^22.15.7",
+    "tsx": "^4.22.4",
+    "typescript": "^5.8.3"
+  }
+}
