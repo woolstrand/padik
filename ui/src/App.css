@@ -29,15 +29,28 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* ── App root: horizontal split when debug is open ────────────────── */
+.app-root {
+  display: flex;
+  height: 100%;
+  overflow: hidden;
+}
+
 /* ── App layout ───────────────────────────────────────────────────── */
 .app-layout {
   display: flex;
   flex-direction: column;
   height: 100%;
-  max-width: 860px;
-  margin: 0 auto;
+  flex: 1 1 auto;
+  min-width: 0;
   border-left: 1px solid var(--color-border);
   border-right: 1px solid var(--color-border);
+}
+
+/* When debug panel is open, cap game window to left half */
+.app-root--debug-open .app-layout {
+  max-width: 50%;
+  border-right: none;
 }
 
 .app-header {
