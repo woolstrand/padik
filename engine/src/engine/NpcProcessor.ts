@@ -1,4 +1,5 @@
 import { ILlmClient, NpcConfig, NpcOutput, NpcState, PlayerAction, WorldConfig } from '../types';
+import { npcSystemPrompt, npcUserPrompt, NPC_DEFAULT_ACTION, NPC_CONFUSED_ACTION } from '../prompts';
 
 /**
  * NPC Processor — handles a single NPC turn.
@@ -28,10 +29,10 @@ export class NpcProcessor {
     otherNpcActions: string[],
   ): Promise<NpcOutput> {
     const messages = [
-      { role: 'system' as const, content: this.buildSystemPrompt() },
+      { role: 'system' as const, content: npcSystemPrompt() },
       {
         role: 'user' as const,
-        content: this.buildUserPrompt(
+        content: npcUserPrompt(
           npcConfig,
           previousState,
           worldConfig,
@@ -46,59 +47,6 @@ export class NpcProcessor {
     return this.parseResponse(raw, npcConfig);
   }
 
-  private buildSystemPrompt(): string {
-    return `Ты — система для отыгрыша ролевых персонажей в текстовой ролевой игре.
-Твоя задача — войти в роль персонажа и описать его внутренний монолог и выбранные действия.
-Отвечай СТРОГО в формате JSON, без каких-либо пояснений за пределами JSON:
-{"thoughts": "...", "actions": ["...", "..."]}`;
-  }
-
-  private buildUserPrompt(
-    npc: NpcConfig,
-    state: NpcState,
-    world: WorldConfig,
-    recentNarrative: string,
-    playerAction: PlayerAction | null,
-    otherNpcActions: string[],
-  ): string {
-    const playerText = playerAction
-      ? playerAction.type === 'say'
-        ? `Игрок произнёс вслух: «${playerAction.text}»`
-        : `Игрок совершил действие: ${playerAction.text}`
-      : 'Игрок не предпринял никаких действий.';
-
-    const othersText =
-      otherNpcActions.length > 0
-        ? `Другие персонажи уже сделали следующее:\n${otherNpcActions.map((a) => `  – ${a}`).join('\n')}`
-        : '';
-
-    return `# Обстановка
-${world.setting}
-${world.atmosphere}
-
-# Текущая сцена
-${recentNarrative}
-
-# Твой персонаж: ${npc.name}
-${npc.description}
-
-Черты характера: ${npc.traits.join(', ')}.
-Цели: ${npc.goals.join('; ')}.
-
-# Твои предыдущие мысли
-${state.thoughts || npc.initialState}
-
-# Что происходит прямо сейчас
-${playerText}
-${othersText}
-
-Опиши подробный внутренний монолог персонажа (размышления, эмоции, планирование), \
-а затем выбери 1–3 конкретных действия, которые он совершит в эту минуту.
-
-Отвечай только JSON:
-{"thoughts": "<монолог>", "actions": ["<действие 1>", "<действие 2>"]}`.trim();
-  }
-
   private parseResponse(raw: string, npc: NpcConfig): NpcOutput {
     try {
       const jsonMatch = raw.match(/\{[\s\S]*\}/);
@@ -110,7 +58,7 @@ ${othersText}
         thoughts: parsed.thoughts ?? '',
         actions: Array.isArray(parsed.actions) && parsed.actions.length > 0
           ? parsed.actions
-          : ['ничего не делает'],
+          : [NPC_DEFAULT_ACTION],
       };
     } catch {
       // Graceful fallback: treat the entire response as the thoughts
@@ -118,7 +66,7 @@ ${othersText}
         npcId: npc.id,
         npcName: npc.name,
         thoughts: raw,
-        actions: ['растерянно стоит на месте'],
+        actions: [NPC_CONFUSED_ACTION],
       };
     }
   }
