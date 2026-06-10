@@ -1,0 +1,28 @@
+.narrator-output {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.5rem 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.2rem;
+  scroll-behavior: smooth;
+}
+
+.narrator-entry {
+  margin: 0;
+  line-height: 1.75;
+  color: var(--color-text);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0; }
+}
+
+.narrator-loading {
+  color: var(--color-accent);
+  font-size: 1.4rem;
+  animation: blink 1s step-start infinite;
+}
