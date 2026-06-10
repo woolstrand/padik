@@ -1,4 +1,4 @@
-import { GameStateSnapshot, NpcDebugData, PlayerAction, TurnResult } from './types';
+import { GameStateSnapshot, NpcDebugData, PlayerAction, TurnResult, TurnStreamEvent } from './types';
 
 // The Vite dev server proxies /api to http://localhost:3001, so we use a
 // relative path here.  This works for both dev and a production build
@@ -22,6 +22,48 @@ export async function sendAction(action: PlayerAction): Promise<TurnResult> {
     throw new Error(`POST /api/action failed (${res.status}): ${body}`);
   }
   return res.json() as Promise<TurnResult>;
+}
+
+/**
+ * Streaming variant of sendAction.
+ * Yields TurnStreamEvent objects as the engine emits them via SSE.
+ * Throws on HTTP error or if the stream emits a TurnErrorEvent.
+ */
+export async function* sendActionStream(action: PlayerAction): AsyncGenerator<TurnStreamEvent> {
+  const res = await fetch(`${API_BASE}/action/stream`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(action),
+  });
+
+  if (!res.ok || !res.body) {
+    const body = await res.text();
+    throw new Error(`POST /api/action/stream failed (${res.status}): ${body}`);
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+
+    // SSE lines are separated by double newlines; each line is "data: {...}"
+    const parts = buffer.split('\n\n');
+    buffer = parts.pop() ?? '';
+
+    for (const part of parts) {
+      for (const line of part.split('\n')) {
+        if (line.startsWith('data: ')) {
+          const event = JSON.parse(line.slice(6)) as TurnStreamEvent;
+          yield event;
+        }
+      }
+    }
+  }
 }
 
 export async function fetchDebugData(): Promise<NpcDebugData[]> {

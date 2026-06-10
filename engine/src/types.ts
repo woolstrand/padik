@@ -8,7 +8,48 @@ export interface Message {
 /** Abstraction over LLM completion — NpcProcessor and Narrator depend on this, not on a concrete client. */
 export interface ILlmClient {
   complete(messages: Message[]): Promise<string>;
+  completeStream(messages: Message[]): AsyncIterable<string>;
 }
+
+// ---------------------------------------------------------------------------
+// Streaming turn events — emitted by Orchestrator.processTurnStream
+// ---------------------------------------------------------------------------
+
+export interface NpcStartEvent {
+  type: 'npc:start';
+  npcId: string;
+  npcName: string;
+}
+
+export interface NpcDoneEvent {
+  type: 'npc:done';
+  npcId: string;
+  npcName: string;
+  npcOutput: NpcOutput;
+}
+
+export interface NarratorTokenEvent {
+  type: 'narrator:token';
+  token: string;
+}
+
+export interface TurnDoneEvent {
+  type: 'done';
+  narrative: string;
+  npcOutputs: NpcOutput[];
+}
+
+export interface TurnErrorEvent {
+  type: 'error';
+  message: string;
+}
+
+export type TurnStreamEvent =
+  | NpcStartEvent
+  | NpcDoneEvent
+  | NarratorTokenEvent
+  | TurnDoneEvent
+  | TurnErrorEvent;
 
 export interface NpcConfig {
   id: string;

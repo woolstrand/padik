@@ -8,7 +8,9 @@ import {
   NpcOutput,
   NpcState,
   PlayerAction,
+  TurnDoneEvent,
   TurnResult,
+  TurnStreamEvent,
   WorldConfig,
 } from '../types';
 
@@ -105,6 +107,76 @@ export class Orchestrator {
     this.gameState.turnCount++;
 
     return { narrative, npcOutputs };
+  }
+
+  /**
+   * Streaming variant of processTurn.
+   * Yields TurnStreamEvents:
+   *   - npc:start / npc:done for each NPC as it is processed
+   *   - narrator:token for each streamed narrator token
+   *   - done with the final narrative and npcOutputs
+   */
+  async *processTurnStream(playerAction: PlayerAction): AsyncGenerator<TurnStreamEvent> {
+    const recentNarrative =
+      this.gameState.narrativeHistory.at(-1) ?? this.gameState.worldConfig.initialScene;
+
+    const npcOutputs: NpcOutput[] = [];
+    const npcIds = Array.from(this.gameState.npcStates.keys());
+
+    for (const npcId of npcIds) {
+      const state = this.gameState.npcStates.get(npcId)!;
+
+      yield { type: 'npc:start', npcId, npcName: state.npc.name };
+
+      const otherNpcActions = npcOutputs.map(
+        (o) => `${o.npcName}: ${o.actions.join(', ')}`,
+      );
+
+      const output = await this.npcProcessor.process(
+        state.npc,
+        state,
+        this.gameState.worldConfig,
+        recentNarrative,
+        playerAction.type === 'skip' ? null : playerAction,
+        otherNpcActions,
+      );
+
+      npcOutputs.push(output);
+      yield { type: 'npc:done', npcId, npcName: state.npc.name, npcOutput: output };
+
+      this.debugHelper.record(
+        npcId,
+        output.npcName,
+        this.gameState.turnCount,
+        recentNarrative,
+        playerAction.type === 'skip' ? null : playerAction,
+        output.thoughts,
+        output.actions,
+      );
+
+      this.gameState.npcStates.set(npcId, {
+        ...state,
+        thoughts: output.thoughts,
+        lastActions: output.actions,
+      });
+    }
+
+    let narrative = '';
+    for await (const token of this.narrator.narrateStream(
+      this.gameState.worldConfig,
+      this.gameState.narrativeHistory,
+      playerAction.type === 'skip' ? null : playerAction,
+      npcOutputs,
+    )) {
+      narrative += token;
+      yield { type: 'narrator:token', token };
+    }
+
+    this.gameState.narrativeHistory.push(narrative);
+    this.gameState.turnCount++;
+
+    const doneEvent: TurnDoneEvent = { type: 'done', narrative, npcOutputs };
+    yield doneEvent;
   }
 
   getGameState(): Readonly<GameState> {

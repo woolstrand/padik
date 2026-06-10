@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { NarratorOutput } from './components/NarratorOutput';
 import { PlayerInput } from './components/PlayerInput';
 import { DebugPanel } from './components/DebugPanel';
-import { fetchInitialState, sendAction, fetchDebugData } from './api';
+import { fetchInitialState, sendActionStream, fetchDebugData } from './api';
 import { NpcDebugData } from './types';
 import './App.css';
 
@@ -12,6 +12,10 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const [debugData, setDebugData] = useState<NpcDebugData[]>([]);
   const [isDebugOpen, setIsDebugOpen] = useState(false);
+  /** Label shown while an NPC is being processed ("Vasya думает…"). */
+  const [progressMessage, setProgressMessage] = useState<string | undefined>(undefined);
+  /** Partially received narrator text during streaming. */
+  const [streamingEntry, setStreamingEntry] = useState<string | undefined>(undefined);
 
   // Load initial game state on mount
   useEffect(() => {
@@ -33,15 +37,33 @@ export function App() {
   async function processAction(type: 'act' | 'say' | 'skip', text: string) {
     setIsLoading(true);
     setError(null);
+    setProgressMessage(undefined);
+    setStreamingEntry(undefined);
+
     try {
-      const result = await sendAction({ type, text });
-      setNarratives((prev) => [...prev, result.narrative]);
-      // Refresh debug data after each turn
-      const debug = await fetchDebugData();
-      setDebugData(debug);
+      for await (const event of sendActionStream({ type, text })) {
+        if (event.type === 'npc:start') {
+          setProgressMessage(`${event.npcName} думает…`);
+        } else if (event.type === 'npc:done') {
+          setProgressMessage(undefined);
+        } else if (event.type === 'narrator:token') {
+          setStreamingEntry((prev) => (prev ?? '') + event.token);
+        } else if (event.type === 'done') {
+          setNarratives((prev) => [...prev, event.narrative]);
+          setStreamingEntry(undefined);
+          setProgressMessage(undefined);
+          // Refresh debug data after each turn
+          const debug = await fetchDebugData();
+          setDebugData(debug);
+        } else if (event.type === 'error') {
+          throw new Error(event.message);
+        }
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       setError(`Ошибка: ${msg}`);
+      setStreamingEntry(undefined);
+      setProgressMessage(undefined);
     } finally {
       setIsLoading(false);
     }
@@ -56,7 +78,11 @@ export function App() {
         </header>
 
         <main className="app-main">
-          <NarratorOutput entries={narratives} isLoading={isLoading} />
+          <NarratorOutput
+            entries={narratives}
+            streamingEntry={streamingEntry}
+            progressMessage={progressMessage}
+          />
         </main>
 
         {error && (
@@ -83,3 +109,4 @@ export function App() {
     </div>
   );
 }
+

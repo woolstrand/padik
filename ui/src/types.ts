@@ -45,3 +45,43 @@ export interface GameStateSnapshot {
   turnCount: number;
   worldConfig: WorldConfig;
 }
+
+// ---------------------------------------------------------------------------
+// Streaming turn events — mirrors engine/src/types.ts TurnStreamEvent
+// ---------------------------------------------------------------------------
+
+export interface NpcStartEvent {
+  type: 'npc:start';
+  npcId: string;
+  npcName: string;
+}
+
+export interface NpcDoneEvent {
+  type: 'npc:done';
+  npcId: string;
+  npcName: string;
+  npcOutput: NpcOutput;
+}
+
+export interface NarratorTokenEvent {
+  type: 'narrator:token';
+  token: string;
+}
+
+export interface TurnDoneEvent {
+  type: 'done';
+  narrative: string;
+  npcOutputs: NpcOutput[];
+}
+
+export interface TurnErrorEvent {
+  type: 'error';
+  message: string;
+}
+
+export type TurnStreamEvent =
+  | NpcStartEvent
+  | NpcDoneEvent
+  | NarratorTokenEvent
+  | TurnDoneEvent
+  | TurnErrorEvent;
