@@ -1,4 +1,4 @@
-import { GameStateSnapshot, PlayerAction, TurnResult } from './types';
+import { GameStateSnapshot, NpcDebugData, PlayerAction, TurnResult } from './types';
 
 // The Vite dev server proxies /api to http://localhost:3001, so we use a
 // relative path here.  This works for both dev and a production build
@@ -22,4 +22,10 @@ export async function sendAction(action: PlayerAction): Promise<TurnResult> {
     throw new Error(`POST /api/action failed (${res.status}): ${body}`);
   }
   return res.json() as Promise<TurnResult>;
+}
+
+export async function fetchDebugData(): Promise<NpcDebugData[]> {
+  const res = await fetch(`${API_BASE}/debug`);
+  if (!res.ok) throw new Error(`GET /api/debug failed: ${res.status}`);
+  return res.json() as Promise<NpcDebugData[]>;
 }

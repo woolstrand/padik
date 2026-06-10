@@ -20,6 +20,19 @@ export interface TurnResult {
   npcOutputs: NpcOutput[];
 }
 
+export interface NpcDebugStep {
+  turn: number;
+  situation: string;
+  thoughts: string;
+  actions: string[];
+}
+
+export interface NpcDebugData {
+  npcId: string;
+  npcName: string;
+  steps: NpcDebugStep[];
+}
+
 export interface WorldConfig {
   setting: string;
   atmosphere: string;

@@ -86,6 +86,15 @@ app.get('/api/state', (_req: Request, res: Response) => {
   });
 });
 
+/**
+ * GET /api/debug
+ * Returns per-NPC debug data: for each NPC, the list of steps with
+ * input situation, output thoughts and output actions.
+ */
+app.get('/api/debug', (_req: Request, res: Response) => {
+  res.json(orchestrator.getDebugData());
+});
+
 app.listen(SERVER_PORT, () => {
   console.log(`Padik game engine running on http://localhost:${SERVER_PORT}`);
   console.log(`LLM endpoint: ${LLM_BASE_URL}`);

@@ -58,3 +58,17 @@ export interface TurnResult {
   narrative: string;
   npcOutputs: NpcOutput[];
 }
+
+export interface NpcDebugStep {
+  turn: number;
+  /** Formatted description of what the NPC was shown (scene + player action). */
+  situation: string;
+  thoughts: string;
+  actions: string[];
+}
+
+export interface NpcDebugData {
+  npcId: string;
+  npcName: string;
+  steps: NpcDebugStep[];
+}

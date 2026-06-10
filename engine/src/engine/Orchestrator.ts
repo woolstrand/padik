@@ -1,8 +1,10 @@
 import { Narrator } from './Narrator';
 import { NpcProcessor } from './NpcProcessor';
+import { NpcDebugHelper } from './NpcDebugHelper';
 import {
   GameState,
   NpcConfig,
+  NpcDebugData,
   NpcOutput,
   NpcState,
   PlayerAction,
@@ -22,6 +24,7 @@ import {
  */
 export class Orchestrator {
   private readonly gameState: GameState;
+  private readonly debugHelper = new NpcDebugHelper();
 
   constructor(
     private readonly npcProcessor: NpcProcessor,
@@ -72,6 +75,17 @@ export class Orchestrator {
 
       npcOutputs.push(output);
 
+      // Record step in debug helper
+      this.debugHelper.record(
+        npcId,
+        output.npcName,
+        this.gameState.turnCount,
+        recentNarrative,
+        playerAction.type === 'skip' ? null : playerAction,
+        output.thoughts,
+        output.actions,
+      );
+
       // Persist thoughts for the next turn; actions are ephemeral
       this.gameState.npcStates.set(npcId, {
         ...state,
@@ -95,5 +109,9 @@ export class Orchestrator {
 
   getGameState(): Readonly<GameState> {
     return this.gameState;
+  }
+
+  getDebugData(): NpcDebugData[] {
+    return this.debugHelper.getAll();
   }
 }
