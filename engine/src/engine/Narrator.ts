@@ -27,4 +27,21 @@ export class Narrator {
 
     return this.llmClient.complete(messages);
   }
+
+  async *narrateStream(
+    worldConfig: WorldConfig,
+    narrativeHistory: string[],
+    playerAction: PlayerAction | null,
+    npcOutputs: NpcOutput[],
+  ): AsyncIterable<string> {
+    const messages = [
+      { role: 'system' as const, content: narratorSystemPrompt() },
+      {
+        role: 'user' as const,
+        content: narratorUserPrompt(worldConfig, narrativeHistory, playerAction, npcOutputs),
+      },
+    ];
+
+    yield* this.llmClient.completeStream(messages);
+  }
 }

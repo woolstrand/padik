@@ -26,3 +26,20 @@
   font-size: 1.4rem;
   animation: blink 1s step-start infinite;
 }
+
+.narrator-progress {
+  color: var(--color-accent);
+  font-style: italic;
+  opacity: 0.75;
+}
+
+.narrator-streaming {
+  color: var(--color-text);
+}
+
+.narrator-cursor {
+  color: var(--color-accent);
+  font-size: 1.1em;
+  animation: blink 1s step-start infinite;
+  margin-left: 1px;
+}

@@ -35,4 +35,19 @@ export class LlmClient implements ILlmClient {
     });
     return response.choices[0]?.message?.content ?? '';
   }
+
+  async *completeStream(messages: Message[]): AsyncIterable<string> {
+    const stream = await this.client.chat.completions.create({
+      model: this.config.model,
+      messages,
+      temperature: this.config.temperature,
+      max_tokens: this.config.maxTokens,
+      stream: true,
+    });
+
+    for await (const chunk of stream) {
+      const token = chunk.choices[0]?.delta?.content;
+      if (token) yield token;
+    }
+  }
 }

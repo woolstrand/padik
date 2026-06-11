@@ -74,9 +74,50 @@ app.post('/api/action', async (req: Request, res: Response) => {
 });
 
 /**
- * GET /api/state
- * Returns current game state snapshot (narrative history, turn count, world config).
+ * POST /api/action/stream
+ * Body: PlayerAction { type: 'act' | 'say' | 'skip', text: string }
+ * Returns: Server-Sent Events stream of TurnStreamEvent objects.
+ *   - {"type":"npc:start","npcId":"...","npcName":"..."}
+ *   - {"type":"npc:done","npcId":"...","npcName":"...","npcOutput":{...}}
+ *   - {"type":"narrator:token","token":"..."}
+ *   - {"type":"done","narrative":"...","npcOutputs":[...]}
+ *   - {"type":"error","message":"..."}
  */
+app.post('/api/action/stream', async (req: Request, res: Response) => {
+  const playerAction = req.body as PlayerAction;
+
+  if (!playerAction?.type || !['act', 'say', 'skip'].includes(playerAction.type)) {
+    res.status(400).json({ error: 'Invalid action type. Use "act", "say", or "skip".' });
+    return;
+  }
+
+  if (playerAction.type !== 'skip' && typeof playerAction.text !== 'string') {
+    res.status(400).json({ error: 'Missing text for "act" or "say" action.' });
+    return;
+  }
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+
+  const sendEvent = (event: object) => {
+    res.write(`data: ${JSON.stringify(event)}\n\n`);
+  };
+
+  try {
+    for await (const event of orchestrator.processTurnStream(playerAction)) {
+      sendEvent(event);
+    }
+  } catch (err) {
+    console.error('Error processing turn stream:', err);
+    sendEvent({ type: 'error', message: 'Failed to process turn. Is LM Studio running?' });
+  } finally {
+    res.end();
+  }
+});
+
+
 app.get('/api/state', (_req: Request, res: Response) => {
   const state = orchestrator.getGameState();
   res.json({
