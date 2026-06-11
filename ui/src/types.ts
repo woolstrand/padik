@@ -44,6 +44,16 @@ export interface GameStateSnapshot {
   narrativeHistory: string[];
   turnCount: number;
   worldConfig: WorldConfig;
+  storyId: string;
+}
+
+export interface StoryInfo {
+  id: string;
+}
+
+export interface StoryListResponse {
+  stories: StoryInfo[];
+  selectedStoryId: string;
 }
 
 // ---------------------------------------------------------------------------
