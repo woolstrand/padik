@@ -28,6 +28,7 @@ const repoRoot = path.resolve(__dirname, '..', '..');
 const userdataRoot = path.join(repoRoot, USERDATA_DIR);
 const storiesRoot = path.join(userdataRoot, STORIES_DIR);
 const selectedStoryPath = path.join(userdataRoot, STORY_SELECTION_FILE);
+const storiesRootWithSeparator = `${path.resolve(storiesRoot)}${path.sep}`;
 
 function listStories(): StoryInfo[] {
   if (!fs.existsSync(storiesRoot)) return [];
@@ -49,7 +50,13 @@ function getStoryFolderPath(storyId: string): string {
   if (!isValidStoryId(storyId)) {
     throw new Error(`Invalid story id: ${storyId}`);
   }
-  return path.join(storiesRoot, storyId);
+
+  const resolvedStoryPath = path.resolve(storiesRoot, storyId);
+  if (!resolvedStoryPath.startsWith(storiesRootWithSeparator)) {
+    throw new Error(`Invalid story path for id: ${storyId}`);
+  }
+
+  return resolvedStoryPath;
 }
 
 function isStoryFolderValid(storyId: string): boolean {
