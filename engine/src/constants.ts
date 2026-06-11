@@ -8,7 +8,10 @@ export const LLM_MAX_TOKENS = 1500;
 
 export const SERVER_PORT = 3001;
 
+export const USERDATA_DIR = 'userdata';
+export const STORIES_DIR = 'stories';
+export const STORY_SELECTION_FILE = 'selected-story.json';
 export const WORLD_FILE = 'world.json';
-export const NPC_FILES = ['npc_babushka.json', 'npc_punk.json'];
+export const DEFAULT_STORY_ID = 'padik';
 
 export const MAX_NARRATIVE_HISTORY_IN_PROMPT = 3;

@@ -22,20 +22,30 @@ padik/
 │       │   ├── NpcProcessor.ts   – per-NPC prompt builder + response parser
 │       │   ├── Narrator.ts       – story narrator
 │       │   └── Orchestrator.ts   – data-flow coordinator
-│       ├── data/
-│       │   ├── world.json        – location / atmosphere
-│       │   ├── npc_babushka.json – Баба Нюра
-│       │   └── npc_punk.json     – Катя
 │       └── index.ts              – Express server + dependency wiring
-└── ui/              # React / Vite frontend
-    └── src/
-        ├── main.tsx
-        ├── App.tsx
-        ├── api.ts                – typed fetch wrappers
-        └── components/
-            ├── NarratorOutput    – scrollable narrative log
-            └── PlayerInput       – textarea + Act / Say / Skip buttons
+├── ui/              # React / Vite frontend
+│   └── src/
+│       ├── main.tsx
+│       ├── App.tsx
+│       ├── api.ts                – typed fetch wrappers
+│       └── components/
+│           ├── NarratorOutput    – scrollable narrative log
+│           └── PlayerInput       – textarea + Act / Say / Skip buttons
+└── userdata/
+    └── stories/
+        └── padik/                # default story data
+            ├── world.json
+            ├── npc_babushka.json
+            └── npc_punk.json
 ```
+
+Custom stories live in `userdata/stories/<story-id>/` and should contain:
+
+- `world.json`
+- one or more NPC files named `npc_*.json`
+
+On the main page, choose a story and confirm to start a fresh session from that folder.
+The last selected story is persisted across reloads and server restarts.
 
 ### Design principles
 

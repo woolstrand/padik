@@ -81,6 +81,10 @@ export interface GameState {
   turnCount: number;
 }
 
+export interface StoryInfo {
+  id: string;
+}
+
 export interface NpcOutput {
   npcId: string;
   npcName: string;

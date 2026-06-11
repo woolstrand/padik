@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react';
 import { NarratorOutput } from './components/NarratorOutput';
 import { PlayerInput } from './components/PlayerInput';
 import { DebugPanel } from './components/DebugPanel';
-import { fetchInitialState, sendActionStream, fetchDebugData } from './api';
-import { NpcDebugData } from './types';
+import { fetchInitialState, fetchStories, sendActionStream, fetchDebugData, startSession } from './api';
+import { NpcDebugData, StoryInfo } from './types';
 import './App.css';
 
 export function App() {
@@ -12,6 +12,9 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const [debugData, setDebugData] = useState<NpcDebugData[]>([]);
   const [isDebugOpen, setIsDebugOpen] = useState(false);
+  const [stories, setStories] = useState<StoryInfo[]>([]);
+  const [selectedStoryId, setSelectedStoryId] = useState<string>('');
+  const [pendingStoryId, setPendingStoryId] = useState<string>('');
   /** Label shown while an NPC is being processed ("Vasya думает…"). */
   const [progressMessage, setProgressMessage] = useState<string | undefined>(undefined);
   /** Partially received narrator text during streaming. */
@@ -19,8 +22,12 @@ export function App() {
 
   // Load initial game state on mount
   useEffect(() => {
-    fetchInitialState()
-      .then((state) => {
+    Promise.all([fetchStories(), fetchInitialState()])
+      .then(([storyList, state]) => {
+        setStories(storyList.stories);
+        const activeStoryId = state.storyId || storyList.selectedStoryId;
+        setSelectedStoryId(activeStoryId);
+        setPendingStoryId(activeStoryId);
         const entries =
           state.narrativeHistory.length > 0
             ? state.narrativeHistory
@@ -33,6 +40,28 @@ export function App() {
       })
       .finally(() => setIsLoading(false));
   }, []);
+
+  async function handleStartSession() {
+    if (!pendingStoryId) return;
+
+    setIsLoading(true);
+    setError(null);
+    setProgressMessage(undefined);
+    setStreamingEntry(undefined);
+
+    try {
+      const state = await startSession(pendingStoryId);
+      setSelectedStoryId(state.storyId);
+      setPendingStoryId(state.storyId);
+      setNarratives([state.worldConfig.initialScene]);
+      setDebugData([]);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(`Не удалось запустить новую сессию: ${msg}`);
+    } finally {
+      setIsLoading(false);
+    }
+  }
 
   async function processAction(type: 'act' | 'say' | 'skip', text: string) {
     setIsLoading(true);
@@ -73,8 +102,33 @@ export function App() {
     <div className={`app-root${isDebugOpen ? ' app-root--debug-open' : ''}`}>
       <div className="app-layout">
         <header className="app-header">
-          <span className="app-title">ПАДИК</span>
-          <span className="app-subtitle">текстовая ролевая игра</span>
+          <div className="app-header-left">
+            <span className="app-title">ПАДИК</span>
+            <span className="app-subtitle">текстовая ролевая игра</span>
+          </div>
+          <div className="app-story-controls">
+            <select
+              className="app-story-select"
+              value={pendingStoryId}
+              onChange={(e) => setPendingStoryId(e.target.value)}
+              disabled={isLoading || stories.length === 0}
+              aria-label="Выбор истории"
+            >
+              {stories.map((story) => (
+                <option key={story.id} value={story.id}>
+                  {story.id}
+                </option>
+              ))}
+            </select>
+            <button
+              className="app-story-confirm"
+              onClick={() => void handleStartSession()}
+              disabled={isLoading || !pendingStoryId}
+              title={`Текущая история: ${selectedStoryId || 'не выбрана'}`}
+            >
+              Начать сессию
+            </button>
+          </div>
         </header>
 
         <main className="app-main">
@@ -109,4 +163,3 @@ export function App() {
     </div>
   );
 }
-
