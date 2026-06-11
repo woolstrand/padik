@@ -1,4 +1,11 @@
-import { GameStateSnapshot, NpcDebugData, PlayerAction, TurnResult, TurnStreamEvent } from './types';
+import {
+  GameStateSnapshot,
+  NpcDebugData,
+  PlayerAction,
+  StoryListResponse,
+  TurnResult,
+  TurnStreamEvent,
+} from './types';
 
 // The Vite dev server proxies /api to http://localhost:3001, so we use a
 // relative path here.  This works for both dev and a production build
@@ -70,4 +77,23 @@ export async function fetchDebugData(): Promise<NpcDebugData[]> {
   const res = await fetch(`${API_BASE}/debug`);
   if (!res.ok) throw new Error(`GET /api/debug failed: ${res.status}`);
   return res.json() as Promise<NpcDebugData[]>;
+}
+
+export async function fetchStories(): Promise<StoryListResponse> {
+  const res = await fetch(`${API_BASE}/stories`);
+  if (!res.ok) throw new Error(`GET /api/stories failed: ${res.status}`);
+  return res.json() as Promise<StoryListResponse>;
+}
+
+export async function startSession(storyId: string): Promise<GameStateSnapshot> {
+  const res = await fetch(`${API_BASE}/session/start`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ storyId }),
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`POST /api/session/start failed (${res.status}): ${body}`);
+  }
+  return res.json() as Promise<GameStateSnapshot>;
 }

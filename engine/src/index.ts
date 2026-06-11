@@ -7,22 +7,99 @@ import { NpcProcessor } from './engine/NpcProcessor';
 import { Narrator } from './engine/Narrator';
 import { Orchestrator } from './engine/Orchestrator';
 import {
+  DEFAULT_STORY_ID,
   LLM_BASE_URL,
   LLM_MAX_TOKENS,
   LLM_MODEL,
   LLM_TEMPERATURE,
-  NPC_FILES,
   SERVER_PORT,
+  STORIES_DIR,
+  STORY_SELECTION_FILE,
+  USERDATA_DIR,
   WORLD_FILE,
 } from './constants';
-import { NpcConfig, PlayerAction, WorldConfig } from './types';
+import { NpcConfig, PlayerAction, StoryInfo, WorldConfig } from './types';
 
-function loadJson<T>(filename: string): T {
-  const filepath = path.join(__dirname, 'data', filename);
+function loadJson<T>(filepath: string): T {
   return JSON.parse(fs.readFileSync(filepath, 'utf-8')) as T;
 }
 
-function buildOrchestrator(): Orchestrator {
+const repoRoot = path.resolve(__dirname, '..', '..');
+const userdataRoot = path.join(repoRoot, USERDATA_DIR);
+const storiesRoot = path.join(userdataRoot, STORIES_DIR);
+const selectedStoryPath = path.join(userdataRoot, STORY_SELECTION_FILE);
+
+function listStories(): StoryInfo[] {
+  if (!fs.existsSync(storiesRoot)) return [];
+
+  return fs
+    .readdirSync(storiesRoot, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .filter((storyId) => isValidStoryId(storyId) && isStoryFolderValid(storyId))
+    .sort()
+    .map((id) => ({ id }));
+}
+
+function isValidStoryId(storyId: string): boolean {
+  return /^[a-zA-Z0-9_-]+$/.test(storyId);
+}
+
+function getStoryFolderPath(storyId: string): string {
+  if (!isValidStoryId(storyId)) {
+    throw new Error(`Invalid story id: ${storyId}`);
+  }
+  return path.join(storiesRoot, storyId);
+}
+
+function isStoryFolderValid(storyId: string): boolean {
+  const folderPath = getStoryFolderPath(storyId);
+  if (!fs.existsSync(path.join(folderPath, WORLD_FILE))) return false;
+  const npcFiles = fs
+    .readdirSync(folderPath)
+    .filter((filename) => filename.startsWith('npc_') && filename.endsWith('.json'));
+  return npcFiles.length > 0;
+}
+
+function getNpcFiles(storyId: string): string[] {
+  const storyFolder = getStoryFolderPath(storyId);
+  return fs
+    .readdirSync(storyFolder)
+    .filter((filename) => filename.startsWith('npc_') && filename.endsWith('.json'))
+    .sort();
+}
+
+function readSelectedStoryId(availableStories: StoryInfo[]): string {
+  if (availableStories.length === 0) {
+    throw new Error(`No valid stories found in ${storiesRoot}`);
+  }
+
+  const storyIds = new Set(availableStories.map((story) => story.id));
+
+  if (fs.existsSync(selectedStoryPath)) {
+    try {
+      const raw = loadJson<{ storyId?: string }>(selectedStoryPath);
+      if (raw.storyId && storyIds.has(raw.storyId)) {
+        return raw.storyId;
+      }
+    } catch (err) {
+      console.warn(`Ignoring invalid selected story file at ${selectedStoryPath}:`, err);
+    }
+  }
+
+  if (storyIds.has(DEFAULT_STORY_ID)) {
+    return DEFAULT_STORY_ID;
+  }
+
+  return availableStories[0].id;
+}
+
+function writeSelectedStoryId(storyId: string): void {
+  fs.mkdirSync(userdataRoot, { recursive: true });
+  fs.writeFileSync(selectedStoryPath, JSON.stringify({ storyId }, null, 2));
+}
+
+function buildOrchestrator(storyId: string): Orchestrator {
   const llmClient = new LlmClient({
     baseURL: LLM_BASE_URL,
     model: LLM_MODEL,
@@ -33,14 +110,21 @@ function buildOrchestrator(): Orchestrator {
   const npcProcessor = new NpcProcessor(llmClient);
   const narrator = new Narrator(llmClient);
 
-  const worldConfig = loadJson<WorldConfig>(WORLD_FILE);
-  const npcConfigs = NPC_FILES.map((f) => loadJson<NpcConfig>(f));
+  const storyFolder = getStoryFolderPath(storyId);
+  const worldConfig = loadJson<WorldConfig>(path.join(storyFolder, WORLD_FILE));
+  const npcConfigs = getNpcFiles(storyId).map((filename) =>
+    loadJson<NpcConfig>(path.join(storyFolder, filename)),
+  );
 
   return new Orchestrator(npcProcessor, narrator, npcConfigs, worldConfig);
 }
 
 // Composition root: wire up all dependencies here
-const orchestrator = buildOrchestrator();
+fs.mkdirSync(storiesRoot, { recursive: true });
+const initialStories = listStories();
+let currentStoryId = readSelectedStoryId(initialStories);
+writeSelectedStoryId(currentStoryId);
+let orchestrator = buildOrchestrator(currentStoryId);
 
 const app = express();
 app.use(cors());
@@ -124,7 +208,47 @@ app.get('/api/state', (_req: Request, res: Response) => {
     narrativeHistory: state.narrativeHistory,
     turnCount: state.turnCount,
     worldConfig: state.worldConfig,
+    storyId: currentStoryId,
   });
+});
+
+app.get('/api/stories', (_req: Request, res: Response) => {
+  const stories = listStories();
+  res.json({
+    stories,
+    selectedStoryId: currentStoryId,
+  });
+});
+
+app.post('/api/session/start', (req: Request, res: Response) => {
+  const storyId = req.body?.storyId;
+
+  if (typeof storyId !== 'string' || !isValidStoryId(storyId)) {
+    res.status(400).json({ error: 'Invalid story id.' });
+    return;
+  }
+
+  const stories = listStories();
+  if (!stories.some((story) => story.id === storyId)) {
+    res.status(404).json({ error: `Story "${storyId}" not found.` });
+    return;
+  }
+
+  try {
+    orchestrator = buildOrchestrator(storyId);
+    currentStoryId = storyId;
+    writeSelectedStoryId(storyId);
+    const state = orchestrator.getGameState();
+    res.json({
+      narrativeHistory: state.narrativeHistory,
+      turnCount: state.turnCount,
+      worldConfig: state.worldConfig,
+      storyId: currentStoryId,
+    });
+  } catch (err) {
+    console.error('Error starting session:', err);
+    res.status(500).json({ error: 'Failed to start a new session.' });
+  }
 });
 
 /**
@@ -139,4 +263,5 @@ app.get('/api/debug', (_req: Request, res: Response) => {
 app.listen(SERVER_PORT, () => {
   console.log(`Padik game engine running on http://localhost:${SERVER_PORT}`);
   console.log(`LLM endpoint: ${LLM_BASE_URL}`);
+  console.log(`Selected story: ${currentStoryId}`);
 });
