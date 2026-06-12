@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { NarratorOutput } from './components/NarratorOutput';
 import { PlayerInput } from './components/PlayerInput';
 import { DebugPanel } from './components/DebugPanel';
-import { fetchInitialState, fetchStories, sendActionStream, fetchDebugData, startSession } from './api';
+import { fetchInitialState, fetchStories, sendActionStream, fetchDebugData, startSession, retryActionStream } from './api';
 import { NpcDebugData, StoryInfo } from './types';
 import './App.css';
 
@@ -19,6 +19,8 @@ export function App() {
   const [progressMessage, setProgressMessage] = useState<string | undefined>(undefined);
   /** Partially received narrator text during streaming. */
   const [streamingEntry, setStreamingEntry] = useState<string | undefined>(undefined);
+  /** Whether there is a retryable last turn. */
+  const [hasLastTurn, setHasLastTurn] = useState(false);
 
   // Load initial game state on mount
   useEffect(() => {
@@ -55,6 +57,7 @@ export function App() {
       setPendingStoryId(state.storyId);
       setNarratives([state.worldConfig.initialScene]);
       setDebugData([]);
+      setHasLastTurn(false);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       setError(`Не удалось запустить новую сессию: ${msg}`);
@@ -79,9 +82,45 @@ export function App() {
           setStreamingEntry((prev) => (prev ?? '') + event.token);
         } else if (event.type === 'done') {
           setNarratives((prev) => [...prev, event.narrative]);
+          setHasLastTurn(true);
           setStreamingEntry(undefined);
           setProgressMessage(undefined);
           // Refresh debug data after each turn
+          const debug = await fetchDebugData();
+          setDebugData(debug);
+        } else if (event.type === 'error') {
+          throw new Error(event.message);
+        }
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(`Ошибка: ${msg}`);
+      setStreamingEntry(undefined);
+      setProgressMessage(undefined);
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  async function handleRetry() {
+    setIsLoading(true);
+    setError(null);
+    setProgressMessage(undefined);
+    setStreamingEntry(undefined);
+    setNarratives((prev) => prev.slice(0, -1));
+
+    try {
+      for await (const event of retryActionStream()) {
+        if (event.type === 'npc:start') {
+          setProgressMessage(`${event.npcName} думает…`);
+        } else if (event.type === 'npc:done') {
+          setProgressMessage(undefined);
+        } else if (event.type === 'narrator:token') {
+          setStreamingEntry((prev) => (prev ?? '') + event.token);
+        } else if (event.type === 'done') {
+          setNarratives((prev) => [...prev, event.narrative]);
+          setStreamingEntry(undefined);
+          setProgressMessage(undefined);
           const debug = await fetchDebugData();
           setDebugData(debug);
         } else if (event.type === 'error') {
@@ -150,6 +189,8 @@ export function App() {
             onAct={(text) => processAction('act', text)}
             onSay={(text) => processAction('say', text)}
             onSkip={() => processAction('skip', '')}
+            onRetry={() => void handleRetry()}
+            canRetry={hasLastTurn && !isLoading}
             disabled={isLoading}
           />
         </footer>

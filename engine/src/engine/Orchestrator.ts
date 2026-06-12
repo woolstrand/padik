@@ -28,6 +28,13 @@ export class Orchestrator {
   private readonly gameState: GameState;
   private readonly debugHelper = new NpcDebugHelper();
 
+  private lastPlayerAction: PlayerAction | null = null;
+  private checkpoint: {
+    narrativeHistory: string[];
+    npcStates: Map<string, NpcState>;
+    turnCount: number;
+  } | null = null;
+
   constructor(
     private readonly npcProcessor: NpcProcessor,
     private readonly narrator: Narrator,
@@ -51,7 +58,29 @@ export class Orchestrator {
     };
   }
 
+  private saveCheckpoint(action: PlayerAction): void {
+    this.lastPlayerAction = action;
+    this.checkpoint = {
+      narrativeHistory: [...this.gameState.narrativeHistory],
+      npcStates: new Map(
+        Array.from(this.gameState.npcStates.entries()).map(([k, v]) => [k, { ...v }]),
+      ),
+      turnCount: this.gameState.turnCount,
+    };
+  }
+
+  private restoreCheckpoint(): void {
+    if (!this.checkpoint) return;
+    this.gameState.narrativeHistory = [...this.checkpoint.narrativeHistory];
+    this.gameState.npcStates = new Map(
+      Array.from(this.checkpoint.npcStates.entries()).map(([k, v]) => [k, { ...v }]),
+    );
+    this.gameState.turnCount = this.checkpoint.turnCount;
+    this.debugHelper.rollbackToTurn(this.checkpoint.turnCount);
+  }
+
   async processTurn(playerAction: PlayerAction): Promise<TurnResult> {
+    this.saveCheckpoint(playerAction);
     const recentNarrative =
       this.gameState.narrativeHistory.at(-1) ?? this.gameState.worldConfig.initialScene;
 
@@ -117,6 +146,7 @@ export class Orchestrator {
    *   - done with the final narrative and npcOutputs
    */
   async *processTurnStream(playerAction: PlayerAction): AsyncGenerator<TurnStreamEvent> {
+    this.saveCheckpoint(playerAction);
     const recentNarrative =
       this.gameState.narrativeHistory.at(-1) ?? this.gameState.worldConfig.initialScene;
 
@@ -177,6 +207,20 @@ export class Orchestrator {
 
     const doneEvent: TurnDoneEvent = { type: 'done', narrative, npcOutputs };
     yield doneEvent;
+  }
+
+  async *retryLastTurnStream(): AsyncGenerator<TurnStreamEvent> {
+    if (!this.lastPlayerAction || !this.checkpoint) {
+      yield { type: 'error', message: 'No previous turn to retry.' };
+      return;
+    }
+    const action = this.lastPlayerAction;
+    this.restoreCheckpoint();
+    yield* this.processTurnStream(action);
+  }
+
+  get hasLastTurn(): boolean {
+    return this.lastPlayerAction !== null && this.checkpoint !== null;
   }
 
   getGameState(): Readonly<GameState> {

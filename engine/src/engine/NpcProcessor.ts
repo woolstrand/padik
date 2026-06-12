@@ -48,26 +48,28 @@ export class NpcProcessor {
   }
 
   private parseResponse(raw: string, npc: NpcConfig): NpcOutput {
-    try {
-      const jsonMatch = raw.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) throw new Error('No JSON block found');
-      const parsed = JSON.parse(jsonMatch[0]) as { thoughts?: string; actions?: string[] };
+    const separatorIndex = raw.indexOf('#ACTIONS#');
+    if (separatorIndex !== -1) {
+      const thoughts = raw.slice(0, separatorIndex).trim();
+      const actionsBlock = raw.slice(separatorIndex + '#ACTIONS#'.length).trim();
+      const actions = actionsBlock
+        .split('\n')
+        .map((line) => line.replace(/^[-*•]\s*/, '').trim())
+        .filter((line) => line.length > 0);
       return {
         npcId: npc.id,
         npcName: npc.name,
-        thoughts: parsed.thoughts ?? '',
-        actions: Array.isArray(parsed.actions) && parsed.actions.length > 0
-          ? parsed.actions
-          : [NPC_DEFAULT_ACTION],
-      };
-    } catch {
-      // Graceful fallback: treat the entire response as the thoughts
-      return {
-        npcId: npc.id,
-        npcName: npc.name,
-        thoughts: raw,
-        actions: [NPC_CONFUSED_ACTION],
+        thoughts,
+        actions: actions.length > 0 ? actions : [NPC_DEFAULT_ACTION],
       };
     }
+
+    // Fallback: treat the entire response as thoughts, signal confusion via action
+    return {
+      npcId: npc.id,
+      npcName: npc.name,
+      thoughts: raw,
+      actions: [NPC_CONFUSED_ACTION],
+    };
   }
 }

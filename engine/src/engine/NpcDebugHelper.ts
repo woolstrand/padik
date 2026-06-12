@@ -45,6 +45,13 @@ export class NpcDebugHelper {
     this.data.get(npcId)!.steps.push(step);
   }
 
+  /** Remove all steps recorded at turn >= fromTurn (used when retrying a turn). */
+  rollbackToTurn(fromTurn: number): void {
+    for (const data of this.data.values()) {
+      data.steps = data.steps.filter((step) => step.turn < fromTurn);
+    }
+  }
+
   /** Return debug data for all NPCs, ordered by first appearance. */
   getAll(): NpcDebugData[] {
     return Array.from(this.data.values());

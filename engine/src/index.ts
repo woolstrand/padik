@@ -208,6 +208,33 @@ app.post('/api/action/stream', async (req: Request, res: Response) => {
   }
 });
 
+/**
+ * POST /api/action/retry/stream
+ * Rolls back the last turn and re-processes it with fresh LLM calls.
+ * Returns the same Server-Sent Events stream as /api/action/stream.
+ */
+app.post('/api/action/retry/stream', async (_req: Request, res: Response) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+
+  const sendEvent = (event: object) => {
+    res.write(`data: ${JSON.stringify(event)}\n\n`);
+  };
+
+  try {
+    for await (const event of orchestrator.retryLastTurnStream()) {
+      sendEvent(event);
+    }
+  } catch (err) {
+    console.error('Error retrying turn stream:', err);
+    sendEvent({ type: 'error', message: 'Failed to retry turn. Is LM Studio running?' });
+  } finally {
+    res.end();
+  }
+});
+
 
 app.get('/api/state', (_req: Request, res: Response) => {
   const state = orchestrator.getGameState();

@@ -81,3 +81,14 @@
 .btn-skip:hover:not(:disabled) {
   background: var(--color-border);
 }
+
+.btn-retry {
+  margin-left: auto;
+  border-color: var(--color-muted);
+  color: var(--color-muted);
+}
+
+.btn-retry:hover:not(:disabled) {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
