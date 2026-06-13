@@ -14,13 +14,14 @@ export class Narrator {
   async narrate(
     worldConfig: WorldConfig,
     narrativeHistory: string[],
+    sceneState: string,
     sceneProcessorOutcome: string,
   ): Promise<string> {
     const messages = [
       { role: 'system' as const, content: narratorSystemPrompt() },
       {
         role: 'user' as const,
-        content: narratorUserPrompt(worldConfig, narrativeHistory, sceneProcessorOutcome),
+        content: narratorUserPrompt(worldConfig, narrativeHistory, sceneState, sceneProcessorOutcome),
       },
     ];
 
@@ -30,13 +31,14 @@ export class Narrator {
   async *narrateStream(
     worldConfig: WorldConfig,
     narrativeHistory: string[],
+    sceneState: string,
     sceneProcessorOutcome: string,
   ): AsyncIterable<string> {
     const messages = [
       { role: 'system' as const, content: narratorSystemPrompt() },
       {
         role: 'user' as const,
-        content: narratorUserPrompt(worldConfig, narrativeHistory, sceneProcessorOutcome),
+        content: narratorUserPrompt(worldConfig, narrativeHistory, sceneState, sceneProcessorOutcome),
       },
     ];
 

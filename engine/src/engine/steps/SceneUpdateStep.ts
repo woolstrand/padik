@@ -1,5 +1,5 @@
 import { PipelineStep } from '../../types';
-import { SceneManager } from '../SceneManager';
+import { SceneStateManager } from '../SceneManager';
 
 export interface SceneUpdateStepInput {
   sceneProcessorOutcome: string;
@@ -16,7 +16,7 @@ export interface SceneUpdateStepInput {
 export class SceneUpdateStep implements PipelineStep<SceneUpdateStepInput, void> {
   readonly displayName = 'Updating scene memory';
 
-  constructor(private readonly sceneManager: SceneManager) {}
+  constructor(private readonly sceneManager: SceneStateManager) {}
 
   execute(input: SceneUpdateStepInput): Promise<void> {
     return this.sceneManager.update(input.sceneProcessorOutcome, input.narratorOutcome);

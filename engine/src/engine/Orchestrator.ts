@@ -2,7 +2,7 @@ import { NpcDebugHelper } from './NpcDebugHelper';
 import { NpcProcessor } from './NpcProcessor';
 import { Narrator } from './Narrator';
 import { SceneProcessor } from './SceneProcessor';
-import { SceneManager } from './SceneManager';
+import { SceneStateManager } from './SceneManager';
 import { NpcStep } from './steps/NpcStep';
 import { NarrateStep } from './steps/NarrateStep';
 import { SceneProcessorStep } from './steps/SceneProcessorStep';
@@ -56,7 +56,7 @@ interface BoundStep {
 export class Orchestrator {
   private readonly gameState: GameState;
   private readonly debugHelper = new NpcDebugHelper();
-  private readonly sceneManager: SceneManager;
+  private readonly sceneManager: SceneStateManager;
 
   // Step objects — created once, reused across turns.
   private readonly npcSteps: Map<string, NpcStep>;
@@ -100,7 +100,7 @@ export class Orchestrator {
       turnCount: 0,
     };
 
-    this.sceneManager = new SceneManager(llmClient, worldConfig, npcConfigs);
+    this.sceneManager = new SceneStateManager(llmClient, worldConfig, npcConfigs);
 
     this.npcSteps = new Map(
       npcConfigs.map((npc) => [npc.id, new NpcStep(npcProcessor, npc.name)]),
@@ -221,6 +221,7 @@ export class Orchestrator {
     const narrateInput = {
       worldConfig: this.gameState.worldConfig,
       narrativeHistory: this.gameState.narrativeHistory,
+      sceneState,
       get sceneProcessorOutcome() { return sceneProcessorOutcome.value; },
     };
     steps.push({

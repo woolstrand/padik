@@ -4,6 +4,7 @@ import { Narrator } from '../Narrator';
 export interface NarrateStepInput {
   worldConfig: WorldConfig;
   narrativeHistory: string[];
+  sceneState: string;
   sceneProcessorOutcome: string;
 }
 
@@ -22,6 +23,7 @@ export class NarrateStep implements PipelineStep<NarrateStepInput, string> {
     return this.narrator.narrate(
       input.worldConfig,
       input.narrativeHistory,
+      input.sceneState,
       input.sceneProcessorOutcome,
     );
   }
@@ -30,6 +32,7 @@ export class NarrateStep implements PipelineStep<NarrateStepInput, string> {
     return this.narrator.narrateStream(
       input.worldConfig,
       input.narrativeHistory,
+      input.sceneState,
       input.sceneProcessorOutcome,
     );
   }

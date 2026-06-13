@@ -1,12 +1,12 @@
 import { ILlmClient, NpcConfig, WorldConfig } from '../types';
 import {
-  sceneManagerSystemPrompt,
-  sceneManagerInitPrompt,
-  sceneManagerUpdatePrompt,
+  sceneStateManagerSystemPrompt,
+  sceneStateManagerInitPrompt,
+  sceneStateManagerUpdatePrompt,
 } from '../prompts';
 
 /**
- * SceneManager — tracks the factual, observable state of the scene.
+ * SceneStateManager — tracks the factual, observable state of the scene.
  *
  * Maintains a natural-language description of what is physically present and
  * happening in the scene: spatial layout, character and object positions,
@@ -15,7 +15,7 @@ import {
  * Initialised async from world + NPC descriptions; updated after each
  * narrator turn via an LLM call that merges previous state with new events.
  */
-export class SceneManager {
+export class SceneStateManager {
   private currentState: string = '';
   private readonly initPromise: Promise<void>;
 
@@ -29,8 +29,8 @@ export class SceneManager {
 
   private async initializeState(worldConfig: WorldConfig, npcConfigs: NpcConfig[]): Promise<void> {
     const messages = [
-      { role: 'system' as const, content: sceneManagerSystemPrompt() },
-      { role: 'user' as const, content: sceneManagerInitPrompt(worldConfig, npcConfigs) },
+      { role: 'system' as const, content: sceneStateManagerSystemPrompt() },
+      { role: 'user' as const, content: sceneStateManagerInitPrompt(worldConfig, npcConfigs) },
     ];
     this.currentState = (await this.llmClient.complete(messages)).trim();
   }
@@ -58,10 +58,10 @@ export class SceneManager {
    */
   async update(sceneProcessorOutcome: string, narratorOutcome: string): Promise<void> {
     const messages = [
-      { role: 'system' as const, content: sceneManagerSystemPrompt() },
+      { role: 'system' as const, content: sceneStateManagerSystemPrompt() },
       {
         role: 'user' as const,
-        content: sceneManagerUpdatePrompt(this.currentState, sceneProcessorOutcome, narratorOutcome),
+        content: sceneStateManagerUpdatePrompt(this.currentState, sceneProcessorOutcome, narratorOutcome),
       },
     ];
     this.currentState = (await this.llmClient.complete(messages)).trim();
