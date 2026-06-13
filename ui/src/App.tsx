@@ -23,6 +23,10 @@ export function App() {
   const [hasLastTurn, setHasLastTurn] = useState(false);
   /** Current factual scene state from SceneManager. */
   const [sceneState, setSceneState] = useState<string>('');
+  /** History of SceneProcessor factual outcomes. */
+  const [sceneProcessorHistory, setSceneProcessorHistory] = useState<string[]>([]);
+  /** History of SceneProcessor reasoning (parallel to sceneProcessorHistory). */
+  const [sceneProcessorReasoningHistory, setSceneProcessorReasoningHistory] = useState<string[]>([]);
 
   // Load initial game state on mount
   useEffect(() => {
@@ -38,6 +42,8 @@ export function App() {
             : [state.worldConfig.initialScene];
         setNarratives(entries);
         setSceneState(state.sceneState ?? '');
+        setSceneProcessorHistory(state.sceneProcessorHistory ?? []);
+        setSceneProcessorReasoningHistory(state.sceneProcessorReasoningHistory ?? []);
       })
       .catch((err: unknown) => {
         const msg = err instanceof Error ? err.message : String(err);
@@ -62,6 +68,8 @@ export function App() {
       setDebugData([]);
       setHasLastTurn(false);
       setSceneState(state.sceneState ?? '');
+      setSceneProcessorHistory(state.sceneProcessorHistory ?? []);
+      setSceneProcessorReasoningHistory(state.sceneProcessorReasoningHistory ?? []);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       setError(`Не удалось запустить новую сессию: ${msg}`);
@@ -88,6 +96,8 @@ export function App() {
           setNarratives((prev) => [...prev, event.narrative]);
           setHasLastTurn(true);
           setSceneState(event.sceneState);
+          setSceneProcessorHistory(event.sceneProcessorHistory ?? []);
+          setSceneProcessorReasoningHistory(event.sceneProcessorReasoningHistory ?? []);
           setStreamingEntry(undefined);
           setProgressMessage(undefined);
           // Refresh debug data after each turn
@@ -125,6 +135,8 @@ export function App() {
         } else if (event.type === 'done') {
           setNarratives((prev) => [...prev, event.narrative]);
           setSceneState(event.sceneState);
+          setSceneProcessorHistory(event.sceneProcessorHistory ?? []);
+          setSceneProcessorReasoningHistory(event.sceneProcessorReasoningHistory ?? []);
           setStreamingEntry(undefined);
           setProgressMessage(undefined);
           const debug = await fetchDebugData();
@@ -205,6 +217,8 @@ export function App() {
       <DebugPanel
         data={debugData}
         sceneState={sceneState}
+        sceneProcessorHistory={sceneProcessorHistory}
+        sceneProcessorReasoningHistory={sceneProcessorReasoningHistory}
         isOpen={isDebugOpen}
         onToggle={() => setIsDebugOpen((v) => !v)}
       />

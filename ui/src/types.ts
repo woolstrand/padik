@@ -46,6 +46,8 @@ export interface GameStateSnapshot {
   worldConfig: WorldConfig;
   storyId: string;
   sceneState: string;
+  sceneProcessorHistory: string[];
+  sceneProcessorReasoningHistory: string[];
 }
 
 export interface StoryInfo {
@@ -81,6 +83,8 @@ export interface TurnDoneEvent {
   narrative: string;
   npcOutputs: NpcOutput[];
   sceneState: string;
+  sceneProcessorHistory: string[];
+  sceneProcessorReasoningHistory: string[];
 }
 
 export interface TurnErrorEvent {

@@ -41,6 +41,8 @@ export interface TurnDoneEvent {
   narrative: string;
   npcOutputs: NpcOutput[];
   sceneState: string;
+  sceneProcessorHistory: string[];
+  sceneProcessorReasoningHistory: string[];
 }
 
 export interface TurnErrorEvent {
@@ -80,6 +82,8 @@ export interface NpcState {
 
 export interface GameState {
   narrativeHistory: string[];
+  sceneProcessorHistory: string[];
+  sceneProcessorReasoningHistory: string[];
   npcStates: Map<string, NpcState>;
   worldConfig: WorldConfig;
   turnCount: number;

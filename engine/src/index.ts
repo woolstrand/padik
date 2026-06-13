@@ -5,6 +5,7 @@ import fs from 'fs';
 import { LlmClient } from './llm/LlmClient';
 import { NpcProcessor } from './engine/NpcProcessor';
 import { Narrator } from './engine/Narrator';
+import { SceneProcessor } from './engine/SceneProcessor';
 import { Orchestrator } from './engine/Orchestrator';
 import {
   DEFAULT_STORY_ID,
@@ -116,6 +117,7 @@ function buildOrchestrator(storyId: string): Orchestrator {
 
   const npcProcessor = new NpcProcessor(llmClient);
   const narrator = new Narrator(llmClient);
+  const sceneProcessor = new SceneProcessor(llmClient);
 
   const storyFolder = getStoryFolderPath(storyId);
   const worldConfig = loadJson<WorldConfig>(path.join(storyFolder, WORLD_FILE));
@@ -123,7 +125,7 @@ function buildOrchestrator(storyId: string): Orchestrator {
     loadJson<NpcConfig>(path.join(storyFolder, filename)),
   );
 
-  return new Orchestrator(npcProcessor, narrator, npcConfigs, worldConfig, llmClient);
+  return new Orchestrator(npcProcessor, narrator, sceneProcessor, npcConfigs, worldConfig, llmClient);
 }
 
 // Composition root: wire up all dependencies here
@@ -244,6 +246,8 @@ app.get('/api/state', (_req: Request, res: Response) => {
     worldConfig: state.worldConfig,
     storyId: currentStoryId,
     sceneState: orchestrator.getSceneState(),
+    sceneProcessorHistory: state.sceneProcessorHistory,
+    sceneProcessorReasoningHistory: state.sceneProcessorReasoningHistory,
   });
 });
 
@@ -280,6 +284,8 @@ app.post('/api/session/start', (req: Request, res: Response) => {
       worldConfig: state.worldConfig,
       storyId: currentStoryId,
       sceneState: orchestrator.getSceneState(),
+      sceneProcessorHistory: state.sceneProcessorHistory,
+      sceneProcessorReasoningHistory: state.sceneProcessorReasoningHistory,
     });
   } catch (err) {
     console.error('Error starting session:', err);

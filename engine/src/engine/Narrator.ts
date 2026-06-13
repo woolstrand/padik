@@ -1,12 +1,12 @@
-import { ILlmClient, NpcOutput, PlayerAction, WorldConfig } from '../types';
+import { ILlmClient, WorldConfig } from '../types';
 import { narratorSystemPrompt, narratorUserPrompt } from '../prompts';
 
 /**
- * Narrator — produces the story update paragraph(s) that the player reads.
+ * Narrator — produces the artistic story prose that the player reads.
  *
- * Receives the world config, recent narrative history, the player's action,
- * and the concrete actions decided by all NPC processors this turn.
- * Builds a fresh prompt each time and asks the LLM to write immersive prose.
+ * Receives the world config, recent narrative history, and the factual
+ * SceneProcessor outcome for the current turn.  Transforms the factual
+ * description into immersive prose without adding any new facts.
  */
 export class Narrator {
   constructor(private readonly llmClient: ILlmClient) {}
@@ -14,15 +14,13 @@ export class Narrator {
   async narrate(
     worldConfig: WorldConfig,
     narrativeHistory: string[],
-    playerAction: PlayerAction | null,
-    npcOutputs: NpcOutput[],
-    sceneState: string,
+    sceneProcessorOutcome: string,
   ): Promise<string> {
     const messages = [
       { role: 'system' as const, content: narratorSystemPrompt() },
       {
         role: 'user' as const,
-        content: narratorUserPrompt(worldConfig, narrativeHistory, playerAction, npcOutputs, sceneState),
+        content: narratorUserPrompt(worldConfig, narrativeHistory, sceneProcessorOutcome),
       },
     ];
 
@@ -32,15 +30,13 @@ export class Narrator {
   async *narrateStream(
     worldConfig: WorldConfig,
     narrativeHistory: string[],
-    playerAction: PlayerAction | null,
-    npcOutputs: NpcOutput[],
-    sceneState: string,
+    sceneProcessorOutcome: string,
   ): AsyncIterable<string> {
     const messages = [
       { role: 'system' as const, content: narratorSystemPrompt() },
       {
         role: 'user' as const,
-        content: narratorUserPrompt(worldConfig, narrativeHistory, playerAction, npcOutputs, sceneState),
+        content: narratorUserPrompt(worldConfig, narrativeHistory, sceneProcessorOutcome),
       },
     ];
 

@@ -5,6 +5,8 @@ import './DebugPanel.css';
 interface DebugPanelProps {
   data: NpcDebugData[];
   sceneState: string;
+  sceneProcessorHistory: string[];
+  sceneProcessorReasoningHistory: string[];
   isOpen: boolean;
   onToggle: () => void;
 }
@@ -15,9 +17,14 @@ interface DebugPanelProps {
  * For each NPC the panel shows a scrollable list of turns; each turn entry
  * contains the input situation description, internal thoughts and output
  * actions.
+ *
+ * The world state section has two tabs:
+ *   - "Состояние" — current SceneManager state
+ *   - "История" — chronological SceneProcessor factual outcomes
  */
-export function DebugPanel({ data, sceneState, isOpen, onToggle }: DebugPanelProps) {
+export function DebugPanel({ data, sceneState, sceneProcessorHistory, sceneProcessorReasoningHistory, isOpen, onToggle }: DebugPanelProps) {
   const [selectedNpcId, setSelectedNpcId] = useState<string | null>(null);
+  const [sceneTab, setSceneTab] = useState<'state' | 'history'>('state');
 
   const selectedNpc = data.find((d) => d.npcId === selectedNpcId) ?? data[0] ?? null;
 
@@ -81,16 +88,59 @@ export function DebugPanel({ data, sceneState, isOpen, onToggle }: DebugPanelPro
           )}
 
           <div className="debug-scene">
-            <div className="debug-scene__label">СОСТОЯНИЕ СЦЕНЫ</div>
-            <textarea
-              className="debug-scene__text"
-              readOnly
-              value={sceneState || 'Сцена ещё не инициализирована…'}
-              aria-label="Current scene state"
-            />
+            <div className="debug-scene__tabs">
+              <button
+                className={`debug-scene__tab${sceneTab === 'state' ? ' debug-scene__tab--active' : ''}`}
+                onClick={() => setSceneTab('state')}
+              >
+                СОСТОЯНИЕ
+              </button>
+              <button
+                className={`debug-scene__tab${sceneTab === 'history' ? ' debug-scene__tab--active' : ''}`}
+                onClick={() => setSceneTab('history')}
+              >
+                ИСТОРИЯ
+              </button>
+            </div>
+
+            {sceneTab === 'state' ? (
+              <textarea
+                className="debug-scene__text"
+                readOnly
+                value={sceneState || 'Сцена ещё не инициализирована…'}
+                aria-label="Current scene state"
+              />
+            ) : (
+              <div className="debug-scene__history">
+                {sceneProcessorHistory.length === 0 ? (
+                  <p className="debug-scene__history-empty">Ходов пока нет.</p>
+                ) : (
+                                [...sceneProcessorHistory].reverse().map((entry, i) => {
+                  const turnIndex = sceneProcessorHistory.length - 1 - i;
+                  const reasoning = sceneProcessorReasoningHistory[turnIndex];
+                  return (
+                    <div key={i} className="debug-scene__history-entry">
+                      <div className="debug-scene__history-turn">
+                        Ход {turnIndex + 1}
+                      </div>
+                      {reasoning && (
+                        <>
+                          <div className="debug-step__section-label">Рассуждение</div>
+                          <pre className="debug-step__text debug-step__text--muted">{reasoning}</pre>
+                          <div className="debug-step__section-label">Итог</div>
+                        </>
+                      )}
+                      <pre className="debug-step__text">{entry}</pre>
+                    </div>
+                  );
+                })
+                )}
+              </div>
+            )}
           </div>
         </aside>
       )}
     </>
   );
 }
+

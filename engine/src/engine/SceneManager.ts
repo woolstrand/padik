@@ -51,15 +51,17 @@ export class SceneManager {
   }
 
   /**
-   * Call after each narrator output to merge the new events into the scene
-   * state.  Must not be called before ensureInitialized() resolves.
+   * Call after each turn to merge the new events into the scene state.
+   * Takes both the SceneProcessor factual outcome (primary) and the Narrator
+   * artistic output (secondary context).  Must not be called before
+   * ensureInitialized() resolves.
    */
-  async update(narrative: string): Promise<void> {
+  async update(sceneProcessorOutcome: string, narratorOutcome: string): Promise<void> {
     const messages = [
       { role: 'system' as const, content: sceneManagerSystemPrompt() },
       {
         role: 'user' as const,
-        content: sceneManagerUpdatePrompt(this.currentState, narrative),
+        content: sceneManagerUpdatePrompt(this.currentState, sceneProcessorOutcome, narratorOutcome),
       },
     ];
     this.currentState = (await this.llmClient.complete(messages)).trim();
