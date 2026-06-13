@@ -296,8 +296,8 @@ app.get('/api/debug', (_req: Request, res: Response) => {
   res.json(orchestrator.getDebugData());
 });
 
-app.listen(SERVER_PORT, () => {
-  console.log(`Padik game engine running on http://localhost:${SERVER_PORT}`);
+app.listen(SERVER_PORT, '0.0.0.0', () => {
+  console.log(`Padik game engine running on http://0.0.0.0:${SERVER_PORT}`);
   console.log(`LLM endpoint: ${LLM_BASE_URL}`);
   console.log(`Selected story: ${currentStoryId}`);
 });
