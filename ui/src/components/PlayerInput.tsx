@@ -6,6 +6,7 @@ interface PlayerInputProps {
   onSay: (text: string) => void;
   onSkip: () => void;
   onRetry: () => void;
+  onCancel: () => void;
   canRetry: boolean;
   disabled: boolean;
 }
@@ -19,7 +20,7 @@ interface PlayerInputProps {
  *
  * Ctrl+Enter submits with the last-used button (defaults to Act).
  */
-export function PlayerInput({ onAct, onSay, onSkip, onRetry, canRetry, disabled }: PlayerInputProps) {
+export function PlayerInput({ onAct, onSay, onSkip, onRetry, onCancel, canRetry, disabled }: PlayerInputProps) {
   const [text, setText] = useState('');
 
   function handleAct() {
@@ -85,6 +86,14 @@ export function PlayerInput({ onAct, onSay, onSkip, onRetry, canRetry, disabled 
           title="Повторить последний ход"
         >
           Повторить
+        </button>
+        <button
+          className="btn btn-cancel"
+          onClick={onCancel}
+          disabled={!disabled}
+          title="Остановить обработку"
+        >
+          Стоп
         </button>
       </div>
     </div>

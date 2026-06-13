@@ -59,6 +59,11 @@ export interface StoryListResponse {
   selectedStoryId: string;
 }
 
+export interface ChatEntry {
+  type: 'narrative' | 'player-act' | 'player-say' | 'player-skip';
+  text: string;
+}
+
 // ---------------------------------------------------------------------------
 // Streaming turn events — mirrors engine/src/types.ts TurnStreamEvent
 // ---------------------------------------------------------------------------

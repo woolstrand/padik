@@ -1,13 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { NarratorOutput } from './components/NarratorOutput';
 import { PlayerInput } from './components/PlayerInput';
 import { DebugPanel } from './components/DebugPanel';
-import { fetchInitialState, fetchStories, sendActionStream, fetchDebugData, startSession, retryActionStream } from './api';
-import { NpcDebugData, StoryInfo } from './types';
+import { fetchInitialState, fetchStories, sendActionStream, fetchDebugData, startSession, retryActionStream, cancelTurn } from './api';
+import { NpcDebugData, StoryInfo, ChatEntry } from './types';
 import './App.css';
 
 export function App() {
-  const [narratives, setNarratives] = useState<string[]>([]);
+  const [chatEntries, setChatEntries] = useState<ChatEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [debugData, setDebugData] = useState<NpcDebugData[]>([]);
@@ -28,6 +28,8 @@ export function App() {
   /** History of SceneProcessor reasoning (parallel to sceneProcessorHistory). */
   const [sceneProcessorReasoningHistory, setSceneProcessorReasoningHistory] = useState<string[]>([]);
 
+  const abortControllerRef = useRef<AbortController | null>(null);
+
   // Load initial game state on mount
   useEffect(() => {
     Promise.all([fetchStories(), fetchInitialState()])
@@ -36,11 +38,11 @@ export function App() {
         const activeStoryId = state.storyId || storyList.selectedStoryId;
         setSelectedStoryId(activeStoryId);
         setPendingStoryId(activeStoryId);
-        const entries =
+        const entries: ChatEntry[] =
           state.narrativeHistory.length > 0
-            ? state.narrativeHistory
-            : [state.worldConfig.initialScene];
-        setNarratives(entries);
+            ? state.narrativeHistory.map((text) => ({ type: 'narrative' as const, text }))
+            : [{ type: 'narrative' as const, text: state.worldConfig.initialScene }];
+        setChatEntries(entries);
         setSceneState(state.sceneState ?? '');
         setSceneProcessorHistory(state.sceneProcessorHistory ?? []);
         setSceneProcessorReasoningHistory(state.sceneProcessorReasoningHistory ?? []);
@@ -64,7 +66,7 @@ export function App() {
       const state = await startSession(pendingStoryId);
       setSelectedStoryId(state.storyId);
       setPendingStoryId(state.storyId);
-      setNarratives([state.worldConfig.initialScene]);
+      setChatEntries([{ type: 'narrative', text: state.worldConfig.initialScene }]);
       setDebugData([]);
       setHasLastTurn(false);
       setSceneState(state.sceneState ?? '');
@@ -79,13 +81,19 @@ export function App() {
   }
 
   async function processAction(type: 'act' | 'say' | 'skip', text: string) {
+    // Record player input in chat history immediately
+    const playerEntryType = `player-${type}` as ChatEntry['type'];
+    setChatEntries((prev) => [...prev, { type: playerEntryType, text }]);
+
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
     setIsLoading(true);
     setError(null);
     setProgressMessage(undefined);
     setStreamingEntry(undefined);
 
     try {
-      for await (const event of sendActionStream({ type, text })) {
+      for await (const event of sendActionStream({ type, text }, abortController.signal)) {
         if (event.type === 'step:start') {
           setProgressMessage(`${event.displayName}…`);
         } else if (event.type === 'step:done') {
@@ -93,7 +101,7 @@ export function App() {
         } else if (event.type === 'narrator:token') {
           setStreamingEntry((prev) => (prev ?? '') + event.token);
         } else if (event.type === 'done') {
-          setNarratives((prev) => [...prev, event.narrative]);
+          setChatEntries((prev) => [...prev, { type: 'narrative', text: event.narrative }]);
           setHasLastTurn(true);
           setSceneState(event.sceneState);
           setSceneProcessorHistory(event.sceneProcessorHistory ?? []);
@@ -108,24 +116,43 @@ export function App() {
         }
       }
     } catch (err: unknown) {
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        // Cancelled by user — remove the player entry we just added, restore server state
+        setChatEntries((prev) => prev.slice(0, -1));
+        try { await cancelTurn(); } catch { /* ignore */ }
+        setStreamingEntry(undefined);
+        setProgressMessage(undefined);
+        return;
+      }
       const msg = err instanceof Error ? err.message : String(err);
       setError(`Ошибка: ${msg}`);
       setStreamingEntry(undefined);
       setProgressMessage(undefined);
     } finally {
+      abortControllerRef.current = null;
       setIsLoading(false);
     }
   }
 
   async function handleRetry() {
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
     setIsLoading(true);
     setError(null);
     setProgressMessage(undefined);
     setStreamingEntry(undefined);
-    setNarratives((prev) => prev.slice(0, -1));
+    // Remove the last narrative entry (keep the player entry)
+    setChatEntries((prev) => {
+      for (let i = prev.length - 1; i >= 0; i--) {
+        if (prev[i].type === 'narrative') {
+          return [...prev.slice(0, i), ...prev.slice(i + 1)];
+        }
+      }
+      return prev;
+    });
 
     try {
-      for await (const event of retryActionStream()) {
+      for await (const event of retryActionStream(abortController.signal)) {
         if (event.type === 'step:start') {
           setProgressMessage(`${event.displayName}…`);
         } else if (event.type === 'step:done') {
@@ -133,7 +160,7 @@ export function App() {
         } else if (event.type === 'narrator:token') {
           setStreamingEntry((prev) => (prev ?? '') + event.token);
         } else if (event.type === 'done') {
-          setNarratives((prev) => [...prev, event.narrative]);
+          setChatEntries((prev) => [...prev, { type: 'narrative', text: event.narrative }]);
           setSceneState(event.sceneState);
           setSceneProcessorHistory(event.sceneProcessorHistory ?? []);
           setSceneProcessorReasoningHistory(event.sceneProcessorReasoningHistory ?? []);
@@ -146,13 +173,24 @@ export function App() {
         }
       }
     } catch (err: unknown) {
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        try { await cancelTurn(); } catch { /* ignore */ }
+        setStreamingEntry(undefined);
+        setProgressMessage(undefined);
+        return;
+      }
       const msg = err instanceof Error ? err.message : String(err);
       setError(`Ошибка: ${msg}`);
       setStreamingEntry(undefined);
       setProgressMessage(undefined);
     } finally {
+      abortControllerRef.current = null;
       setIsLoading(false);
     }
+  }
+
+  function handleCancel() {
+    abortControllerRef.current?.abort();
   }
 
   return (
@@ -190,7 +228,7 @@ export function App() {
 
         <main className="app-main">
           <NarratorOutput
-            entries={narratives}
+            entries={chatEntries}
             streamingEntry={streamingEntry}
             progressMessage={progressMessage}
           />
@@ -208,6 +246,7 @@ export function App() {
             onSay={(text) => processAction('say', text)}
             onSkip={() => processAction('skip', '')}
             onRetry={() => void handleRetry()}
+            onCancel={handleCancel}
             canRetry={hasLastTurn && !isLoading}
             disabled={isLoading}
           />

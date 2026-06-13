@@ -238,6 +238,15 @@ app.post('/api/action/retry/stream', async (_req: Request, res: Response) => {
 });
 
 
+/**
+ * POST /api/turn/cancel
+ * Cancels the turn currently in progress and restores the pre-turn checkpoint.
+ */
+app.post('/api/turn/cancel', (_req: Request, res: Response) => {
+  orchestrator.cancelTurn();
+  res.json({ ok: true });
+});
+
 app.get('/api/state', (_req: Request, res: Response) => {
   const state = orchestrator.getGameState();
   res.json({

@@ -360,6 +360,10 @@ export class Orchestrator {
     yield* this.processTurnStream(action);
   }
 
+  cancelTurn(): void {
+    this.restoreCheckpoint();
+  }
+
   get hasLastTurn(): boolean {
     return this.lastPlayerAction !== null && this.checkpoint !== null;
   }

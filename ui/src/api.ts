@@ -36,11 +36,12 @@ export async function sendAction(action: PlayerAction): Promise<TurnResult> {
  * Yields TurnStreamEvent objects as the engine emits them via SSE.
  * Throws on HTTP error or if the stream emits a TurnErrorEvent.
  */
-export async function* sendActionStream(action: PlayerAction): AsyncGenerator<TurnStreamEvent> {
+export async function* sendActionStream(action: PlayerAction, signal?: AbortSignal): AsyncGenerator<TurnStreamEvent> {
   const res = await fetch(`${API_BASE}/action/stream`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(action),
+    signal,
   });
 
   if (!res.ok || !res.body) {
@@ -73,8 +74,8 @@ export async function* sendActionStream(action: PlayerAction): AsyncGenerator<Tu
   }
 }
 
-export async function* retryActionStream(): AsyncGenerator<TurnStreamEvent> {
-  const res = await fetch(`${API_BASE}/action/retry/stream`, { method: 'POST' });
+export async function* retryActionStream(signal?: AbortSignal): AsyncGenerator<TurnStreamEvent> {
+  const res = await fetch(`${API_BASE}/action/retry/stream`, { method: 'POST', signal });
 
   if (!res.ok || !res.body) {
     const body = await res.text();
@@ -103,6 +104,10 @@ export async function* retryActionStream(): AsyncGenerator<TurnStreamEvent> {
       }
     }
   }
+}
+
+export async function cancelTurn(): Promise<void> {
+  await fetch(`${API_BASE}/turn/cancel`, { method: 'POST' });
 }
 
 export async function fetchDebugData(): Promise<NpcDebugData[]> {

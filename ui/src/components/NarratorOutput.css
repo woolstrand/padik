@@ -37,6 +37,16 @@
   color: var(--color-text);
 }
 
+.narrator-player-entry {
+  color: var(--color-accent);
+  opacity: 0.7;
+}
+
+.narrator-player-label {
+  font-weight: 600;
+  font-style: italic;
+}
+
 .narrator-cursor {
   color: var(--color-accent);
   font-size: 1.1em;
