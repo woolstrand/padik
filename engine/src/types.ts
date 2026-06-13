@@ -11,21 +11,24 @@ export interface ILlmClient {
   completeStream(messages: Message[]): AsyncIterable<string>;
 }
 
+/** A single isolated processing unit in the turn pipeline. */
+export interface PipelineStep<TInput, TOutput> {
+  displayName: string;
+  execute(input: TInput): Promise<TOutput>;
+}
+
 // ---------------------------------------------------------------------------
 // Streaming turn events — emitted by Orchestrator.processTurnStream
 // ---------------------------------------------------------------------------
 
-export interface NpcStartEvent {
-  type: 'npc:start';
-  npcId: string;
-  npcName: string;
+export interface StepStartEvent {
+  type: 'step:start';
+  displayName: string;
 }
 
-export interface NpcDoneEvent {
-  type: 'npc:done';
-  npcId: string;
-  npcName: string;
-  npcOutput: NpcOutput;
+export interface StepDoneEvent {
+  type: 'step:done';
+  displayName: string;
 }
 
 export interface NarratorTokenEvent {
@@ -37,6 +40,7 @@ export interface TurnDoneEvent {
   type: 'done';
   narrative: string;
   npcOutputs: NpcOutput[];
+  sceneState: string;
 }
 
 export interface TurnErrorEvent {
@@ -45,8 +49,8 @@ export interface TurnErrorEvent {
 }
 
 export type TurnStreamEvent =
-  | NpcStartEvent
-  | NpcDoneEvent
+  | StepStartEvent
+  | StepDoneEvent
   | NarratorTokenEvent
   | TurnDoneEvent
   | TurnErrorEvent;

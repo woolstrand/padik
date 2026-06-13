@@ -4,6 +4,7 @@ import './DebugPanel.css';
 
 interface DebugPanelProps {
   data: NpcDebugData[];
+  sceneState: string;
   isOpen: boolean;
   onToggle: () => void;
 }
@@ -15,7 +16,7 @@ interface DebugPanelProps {
  * contains the input situation description, internal thoughts and output
  * actions.
  */
-export function DebugPanel({ data, isOpen, onToggle }: DebugPanelProps) {
+export function DebugPanel({ data, sceneState, isOpen, onToggle }: DebugPanelProps) {
   const [selectedNpcId, setSelectedNpcId] = useState<string | null>(null);
 
   const selectedNpc = data.find((d) => d.npcId === selectedNpcId) ?? data[0] ?? null;
@@ -78,6 +79,16 @@ export function DebugPanel({ data, isOpen, onToggle }: DebugPanelProps) {
               )}
             </div>
           )}
+
+          <div className="debug-scene">
+            <div className="debug-scene__label">СОСТОЯНИЕ СЦЕНЫ</div>
+            <textarea
+              className="debug-scene__text"
+              readOnly
+              value={sceneState || 'Сцена ещё не инициализирована…'}
+              aria-label="Current scene state"
+            />
+          </div>
         </aside>
       )}
     </>

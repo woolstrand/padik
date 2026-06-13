@@ -56,7 +56,7 @@
 /* ── Body: NPC list + step area side by side ────────────────────────── */
 .debug-panel__body {
   display: flex;
-  flex: 1;
+  flex: 7;
   overflow: hidden;
 }
 
@@ -147,4 +147,38 @@
   font-size: 0.78rem;
   color: var(--color-text);
   line-height: 1.6;
+}
+
+/* ── Scene state ────────────────────────────────────────────────────── */
+.debug-scene {
+  flex: 3;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--color-border);
+  min-height: 0;
+}
+
+.debug-scene__label {
+  font-size: 0.65rem;
+  letter-spacing: 0.2em;
+  color: var(--color-accent);
+  padding: 0.4rem 0.75rem;
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.debug-scene__text {
+  flex: 1;
+  background: var(--color-bg);
+  border: none;
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  padding: 0.6rem 0.75rem;
+  resize: none;
+  outline: none;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-y: auto;
 }

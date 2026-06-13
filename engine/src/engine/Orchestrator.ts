@@ -1,8 +1,13 @@
-import { Narrator } from './Narrator';
-import { NpcProcessor } from './NpcProcessor';
 import { NpcDebugHelper } from './NpcDebugHelper';
+import { NpcProcessor } from './NpcProcessor';
+import { Narrator } from './Narrator';
+import { SceneManager } from './SceneManager';
+import { NpcStep } from './steps/NpcStep';
+import { NarrateStep } from './steps/NarrateStep';
+import { SceneUpdateStep } from './steps/SceneUpdateStep';
 import {
   GameState,
+  ILlmClient,
   NpcConfig,
   NpcDebugData,
   NpcOutput,
@@ -15,31 +20,58 @@ import {
 } from '../types';
 
 /**
+ * An execution unit inside a turn's pipeline with all inputs pre-bound via
+ * closures.  The Orchestrator iterates these in order each turn.
+ */
+interface BoundStep {
+  displayName: string;
+  execute(): Promise<void>;
+  /**
+   * Optional streaming variant — yields raw text tokens.
+   * When present, the Orchestrator uses this instead of execute() and
+   * forwards each token as a narrator:token event.
+   */
+  executeStream?(): AsyncIterable<string>;
+}
+
+/**
  * Orchestrator — the central data-flow coordinator.
  *
  * Responsibilities:
  *   1. Maintain game state (narrative history, NPC states).
- *   2. On each turn: route the player action to every NPC processor in order,
- *      accumulating their outputs so each NPC can see what previous NPCs did.
- *   3. Forward all NPC outputs and the player action to the Narrator.
- *   4. Store the resulting narrative and return it to the API layer.
+ *   2. At the start of each turn build an ordered BoundStep pipeline.
+ *   3. Iterate the pipeline, passing inputs (derived from game state) to each
+ *      step and routing their outputs back into game state.
+ *   4. Expose both blocking (processTurn) and streaming (processTurnStream)
+ *      variants.
+ *
+ * Steps are logically isolated — they receive typed inputs and produce typed
+ * outputs without knowledge of each other.  All wiring lives here.
  */
 export class Orchestrator {
   private readonly gameState: GameState;
   private readonly debugHelper = new NpcDebugHelper();
+  private readonly sceneManager: SceneManager;
+
+  // Step objects — created once, reused across turns.
+  private readonly npcSteps: Map<string, NpcStep>;
+  private readonly narrateStep: NarrateStep;
+  private readonly sceneUpdateStep: SceneUpdateStep;
 
   private lastPlayerAction: PlayerAction | null = null;
   private checkpoint: {
     narrativeHistory: string[];
     npcStates: Map<string, NpcState>;
     turnCount: number;
+    sceneState: string;
   } | null = null;
 
   constructor(
-    private readonly npcProcessor: NpcProcessor,
-    private readonly narrator: Narrator,
+    npcProcessor: NpcProcessor,
+    narrator: Narrator,
     npcConfigs: NpcConfig[],
     worldConfig: WorldConfig,
+    llmClient: ILlmClient,
   ) {
     const npcStates = new Map<string, NpcState>();
     for (const npc of npcConfigs) {
@@ -56,6 +88,14 @@ export class Orchestrator {
       worldConfig,
       turnCount: 0,
     };
+
+    this.sceneManager = new SceneManager(llmClient, worldConfig, npcConfigs);
+
+    this.npcSteps = new Map(
+      npcConfigs.map((npc) => [npc.id, new NpcStep(npcProcessor, npc.name)]),
+    );
+    this.narrateStep = new NarrateStep(narrator);
+    this.sceneUpdateStep = new SceneUpdateStep(this.sceneManager);
   }
 
   private saveCheckpoint(action: PlayerAction): void {
@@ -66,6 +106,7 @@ export class Orchestrator {
         Array.from(this.gameState.npcStates.entries()).map(([k, v]) => [k, { ...v }]),
       ),
       turnCount: this.gameState.turnCount,
+      sceneState: this.sceneManager.getCurrentState(),
     };
   }
 
@@ -77,135 +118,181 @@ export class Orchestrator {
     );
     this.gameState.turnCount = this.checkpoint.turnCount;
     this.debugHelper.rollbackToTurn(this.checkpoint.turnCount);
+    this.sceneManager.restoreState(this.checkpoint.sceneState);
+  }
+
+  /**
+   * Builds the ordered pipeline for a single turn.
+   *
+   * Each BoundStep captures its inputs via closure so the main execution loop
+   * is a simple iteration with no per-step branching in the Orchestrator.
+   * Routing of intermediate results (npcOutputs → narrator, narrative →
+   * scene-update) is handled here.
+   */
+  private buildPipeline(
+    playerAction: PlayerAction | null,
+    sceneState: string,
+    recentNarrative: string,
+    npcOutputs: NpcOutput[],
+    narrative: { value: string },
+  ): BoundStep[] {
+    const steps: BoundStep[] = [];
+
+    // ── NPC steps (sequential so each sees prior NPCs' actions this turn) ───
+    for (const npcId of this.gameState.npcStates.keys()) {
+      const npcStep = this.npcSteps.get(npcId)!;
+      steps.push({
+        displayName: npcStep.displayName,
+        execute: async () => {
+          const state = this.gameState.npcStates.get(npcId)!;
+          const otherNpcActions = npcOutputs.map(
+            (o) => `${o.npcName}: ${o.actions.join(', ')}`,
+          );
+          const output = await npcStep.execute({
+            npcConfig: state.npc,
+            npcState: state,
+            worldConfig: this.gameState.worldConfig,
+            recentNarrative,
+            playerAction,
+            otherNpcActions,
+            sceneState,
+          });
+          npcOutputs.push(output);
+          this.debugHelper.record(
+            npcId,
+            output.npcName,
+            this.gameState.turnCount,
+            recentNarrative,
+            playerAction,
+            output.thoughts,
+            output.actions,
+          );
+          this.gameState.npcStates.set(npcId, {
+            ...state,
+            thoughts: output.thoughts,
+            lastActions: output.actions,
+          });
+        },
+      });
+    }
+
+    // ── Narrator step ────────────────────────────────────────────────────────
+    // narrateInput.npcOutputs is a live reference — it will be populated by
+    // the NPC steps above before the narrator step executes.
+    const narrateStep = this.narrateStep;
+    const narrateInput = {
+      worldConfig: this.gameState.worldConfig,
+      narrativeHistory: this.gameState.narrativeHistory,
+      playerAction,
+      npcOutputs,
+      sceneState,
+    };
+    steps.push({
+      displayName: narrateStep.displayName,
+      execute: async () => {
+        narrative.value = await narrateStep.execute(narrateInput);
+      },
+      async *executeStream() {
+        for await (const token of narrateStep.narrateStream(narrateInput)) {
+          narrative.value += token;
+          yield token;
+        }
+      },
+    });
+
+    // ── Scene update step ────────────────────────────────────────────────────
+    // narrative.value is set by the narrator step which precedes this one.
+    const sceneUpdateStep = this.sceneUpdateStep;
+    steps.push({
+      displayName: sceneUpdateStep.displayName,
+      execute: async () => {
+        await sceneUpdateStep.execute({ narrative: narrative.value });
+      },
+    });
+
+    return steps;
   }
 
   async processTurn(playerAction: PlayerAction): Promise<TurnResult> {
     this.saveCheckpoint(playerAction);
+    await this.sceneManager.ensureInitialized();
+
+    const sceneState = this.sceneManager.getCurrentState();
     const recentNarrative =
       this.gameState.narrativeHistory.at(-1) ?? this.gameState.worldConfig.initialScene;
+    const playerActionNullable = playerAction.type === 'skip' ? null : playerAction;
 
     const npcOutputs: NpcOutput[] = [];
-    const npcIds = Array.from(this.gameState.npcStates.keys());
+    const narrative = { value: '' };
 
-    // Process NPCs sequentially so each NPC can see prior NPCs' actions this turn
-    for (const npcId of npcIds) {
-      const state = this.gameState.npcStates.get(npcId)!;
-
-      const otherNpcActions = npcOutputs.map(
-        (o) => `${o.npcName}: ${o.actions.join(', ')}`,
-      );
-
-      const output = await this.npcProcessor.process(
-        state.npc,
-        state,
-        this.gameState.worldConfig,
-        recentNarrative,
-        playerAction.type === 'skip' ? null : playerAction,
-        otherNpcActions,
-      );
-
-      npcOutputs.push(output);
-
-      // Record step in debug helper
-      this.debugHelper.record(
-        npcId,
-        output.npcName,
-        this.gameState.turnCount,
-        recentNarrative,
-        playerAction.type === 'skip' ? null : playerAction,
-        output.thoughts,
-        output.actions,
-      );
-
-      // Persist thoughts for the next turn; actions are ephemeral
-      this.gameState.npcStates.set(npcId, {
-        ...state,
-        thoughts: output.thoughts,
-        lastActions: output.actions,
-      });
-    }
-
-    const narrative = await this.narrator.narrate(
-      this.gameState.worldConfig,
-      this.gameState.narrativeHistory,
-      playerAction.type === 'skip' ? null : playerAction,
+    const pipeline = this.buildPipeline(
+      playerActionNullable,
+      sceneState,
+      recentNarrative,
       npcOutputs,
+      narrative,
     );
 
-    this.gameState.narrativeHistory.push(narrative);
+    for (const step of pipeline) {
+      await step.execute();
+    }
+
+    this.gameState.narrativeHistory.push(narrative.value);
     this.gameState.turnCount++;
 
-    return { narrative, npcOutputs };
+    return { narrative: narrative.value, npcOutputs };
   }
 
   /**
    * Streaming variant of processTurn.
    * Yields TurnStreamEvents:
-   *   - npc:start / npc:done for each NPC as it is processed
+   *   - step:start / step:done for each pipeline step as it executes
    *   - narrator:token for each streamed narrator token
    *   - done with the final narrative and npcOutputs
    */
   async *processTurnStream(playerAction: PlayerAction): AsyncGenerator<TurnStreamEvent> {
     this.saveCheckpoint(playerAction);
+    await this.sceneManager.ensureInitialized();
+
+    const sceneState = this.sceneManager.getCurrentState();
     const recentNarrative =
       this.gameState.narrativeHistory.at(-1) ?? this.gameState.worldConfig.initialScene;
+    const playerActionNullable = playerAction.type === 'skip' ? null : playerAction;
 
     const npcOutputs: NpcOutput[] = [];
-    const npcIds = Array.from(this.gameState.npcStates.keys());
+    const narrative = { value: '' };
 
-    for (const npcId of npcIds) {
-      const state = this.gameState.npcStates.get(npcId)!;
-
-      yield { type: 'npc:start', npcId, npcName: state.npc.name };
-
-      const otherNpcActions = npcOutputs.map(
-        (o) => `${o.npcName}: ${o.actions.join(', ')}`,
-      );
-
-      const output = await this.npcProcessor.process(
-        state.npc,
-        state,
-        this.gameState.worldConfig,
-        recentNarrative,
-        playerAction.type === 'skip' ? null : playerAction,
-        otherNpcActions,
-      );
-
-      npcOutputs.push(output);
-      yield { type: 'npc:done', npcId, npcName: state.npc.name, npcOutput: output };
-
-      this.debugHelper.record(
-        npcId,
-        output.npcName,
-        this.gameState.turnCount,
-        recentNarrative,
-        playerAction.type === 'skip' ? null : playerAction,
-        output.thoughts,
-        output.actions,
-      );
-
-      this.gameState.npcStates.set(npcId, {
-        ...state,
-        thoughts: output.thoughts,
-        lastActions: output.actions,
-      });
-    }
-
-    let narrative = '';
-    for await (const token of this.narrator.narrateStream(
-      this.gameState.worldConfig,
-      this.gameState.narrativeHistory,
-      playerAction.type === 'skip' ? null : playerAction,
+    const pipeline = this.buildPipeline(
+      playerActionNullable,
+      sceneState,
+      recentNarrative,
       npcOutputs,
-    )) {
-      narrative += token;
-      yield { type: 'narrator:token', token };
+      narrative,
+    );
+
+    for (const step of pipeline) {
+      yield { type: 'step:start', displayName: step.displayName };
+
+      if (step.executeStream) {
+        for await (const token of step.executeStream()) {
+          yield { type: 'narrator:token', token };
+        }
+      } else {
+        await step.execute();
+      }
+
+      yield { type: 'step:done', displayName: step.displayName };
     }
 
-    this.gameState.narrativeHistory.push(narrative);
+    this.gameState.narrativeHistory.push(narrative.value);
     this.gameState.turnCount++;
 
-    const doneEvent: TurnDoneEvent = { type: 'done', narrative, npcOutputs };
+    const doneEvent: TurnDoneEvent = {
+      type: 'done',
+      narrative: narrative.value,
+      npcOutputs,
+      sceneState: this.sceneManager.getCurrentState(),
+    };
     yield doneEvent;
   }
 
@@ -225,6 +312,10 @@ export class Orchestrator {
 
   getGameState(): Readonly<GameState> {
     return this.gameState;
+  }
+
+  getSceneState(): string {
+    return this.sceneManager.getCurrentState();
   }
 
   getDebugData(): NpcDebugData[] {

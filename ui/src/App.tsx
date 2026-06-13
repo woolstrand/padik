@@ -21,6 +21,8 @@ export function App() {
   const [streamingEntry, setStreamingEntry] = useState<string | undefined>(undefined);
   /** Whether there is a retryable last turn. */
   const [hasLastTurn, setHasLastTurn] = useState(false);
+  /** Current factual scene state from SceneManager. */
+  const [sceneState, setSceneState] = useState<string>('');
 
   // Load initial game state on mount
   useEffect(() => {
@@ -35,6 +37,7 @@ export function App() {
             ? state.narrativeHistory
             : [state.worldConfig.initialScene];
         setNarratives(entries);
+        setSceneState(state.sceneState ?? '');
       })
       .catch((err: unknown) => {
         const msg = err instanceof Error ? err.message : String(err);
@@ -58,6 +61,7 @@ export function App() {
       setNarratives([state.worldConfig.initialScene]);
       setDebugData([]);
       setHasLastTurn(false);
+      setSceneState(state.sceneState ?? '');
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       setError(`Не удалось запустить новую сессию: ${msg}`);
@@ -74,15 +78,16 @@ export function App() {
 
     try {
       for await (const event of sendActionStream({ type, text })) {
-        if (event.type === 'npc:start') {
-          setProgressMessage(`${event.npcName} думает…`);
-        } else if (event.type === 'npc:done') {
+        if (event.type === 'step:start') {
+          setProgressMessage(`${event.displayName}…`);
+        } else if (event.type === 'step:done') {
           setProgressMessage(undefined);
         } else if (event.type === 'narrator:token') {
           setStreamingEntry((prev) => (prev ?? '') + event.token);
         } else if (event.type === 'done') {
           setNarratives((prev) => [...prev, event.narrative]);
           setHasLastTurn(true);
+          setSceneState(event.sceneState);
           setStreamingEntry(undefined);
           setProgressMessage(undefined);
           // Refresh debug data after each turn
@@ -111,14 +116,15 @@ export function App() {
 
     try {
       for await (const event of retryActionStream()) {
-        if (event.type === 'npc:start') {
-          setProgressMessage(`${event.npcName} думает…`);
-        } else if (event.type === 'npc:done') {
+        if (event.type === 'step:start') {
+          setProgressMessage(`${event.displayName}…`);
+        } else if (event.type === 'step:done') {
           setProgressMessage(undefined);
         } else if (event.type === 'narrator:token') {
           setStreamingEntry((prev) => (prev ?? '') + event.token);
         } else if (event.type === 'done') {
           setNarratives((prev) => [...prev, event.narrative]);
+          setSceneState(event.sceneState);
           setStreamingEntry(undefined);
           setProgressMessage(undefined);
           const debug = await fetchDebugData();
@@ -198,6 +204,7 @@ export function App() {
 
       <DebugPanel
         data={debugData}
+        sceneState={sceneState}
         isOpen={isDebugOpen}
         onToggle={() => setIsDebugOpen((v) => !v)}
       />

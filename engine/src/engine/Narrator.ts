@@ -16,12 +16,13 @@ export class Narrator {
     narrativeHistory: string[],
     playerAction: PlayerAction | null,
     npcOutputs: NpcOutput[],
+    sceneState: string,
   ): Promise<string> {
     const messages = [
       { role: 'system' as const, content: narratorSystemPrompt() },
       {
         role: 'user' as const,
-        content: narratorUserPrompt(worldConfig, narrativeHistory, playerAction, npcOutputs),
+        content: narratorUserPrompt(worldConfig, narrativeHistory, playerAction, npcOutputs, sceneState),
       },
     ];
 
@@ -33,12 +34,13 @@ export class Narrator {
     narrativeHistory: string[],
     playerAction: PlayerAction | null,
     npcOutputs: NpcOutput[],
+    sceneState: string,
   ): AsyncIterable<string> {
     const messages = [
       { role: 'system' as const, content: narratorSystemPrompt() },
       {
         role: 'user' as const,
-        content: narratorUserPrompt(worldConfig, narrativeHistory, playerAction, npcOutputs),
+        content: narratorUserPrompt(worldConfig, narrativeHistory, playerAction, npcOutputs, sceneState),
       },
     ];
 

@@ -123,7 +123,7 @@ function buildOrchestrator(storyId: string): Orchestrator {
     loadJson<NpcConfig>(path.join(storyFolder, filename)),
   );
 
-  return new Orchestrator(npcProcessor, narrator, npcConfigs, worldConfig);
+  return new Orchestrator(npcProcessor, narrator, npcConfigs, worldConfig, llmClient);
 }
 
 // Composition root: wire up all dependencies here
@@ -243,6 +243,7 @@ app.get('/api/state', (_req: Request, res: Response) => {
     turnCount: state.turnCount,
     worldConfig: state.worldConfig,
     storyId: currentStoryId,
+    sceneState: orchestrator.getSceneState(),
   });
 });
 
@@ -278,6 +279,7 @@ app.post('/api/session/start', (req: Request, res: Response) => {
       turnCount: state.turnCount,
       worldConfig: state.worldConfig,
       storyId: currentStoryId,
+      sceneState: orchestrator.getSceneState(),
     });
   } catch (err) {
     console.error('Error starting session:', err);

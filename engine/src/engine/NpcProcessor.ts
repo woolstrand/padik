@@ -27,6 +27,7 @@ export class NpcProcessor {
     recentNarrative: string,
     playerAction: PlayerAction | null,
     otherNpcActions: string[],
+    sceneState: string,
   ): Promise<NpcOutput> {
     const messages = [
       { role: 'system' as const, content: npcSystemPrompt() },
@@ -39,6 +40,7 @@ export class NpcProcessor {
           recentNarrative,
           playerAction,
           otherNpcActions,
+          sceneState,
         ),
       },
     ];
