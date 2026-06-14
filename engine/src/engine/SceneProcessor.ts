@@ -7,7 +7,7 @@ import { sceneProcessorSystemPrompt, sceneProcessorUserPrompt } from '../prompts
  * the reasoning is stored in debug history but stripped from the outcome that
  * flows downstream into the Narrator and SceneManager.
  */
-export const SCENE_PROCESSOR_REASONING = true;
+export const SCENE_PROCESSOR_REASONING = false;
 
 const OUTCOME_SEPARATOR = '#OUTCOME#';
 
