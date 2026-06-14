@@ -228,6 +228,7 @@ Update the scene state to reflect the events.
 Integrate any focus details into the general description rather than a separate paragraph.
 Remove details only if new information explicitly contradicts them; otherwise combine old and new.
 Fill any gaps in the factual description yourself.
+You never include speech or dialogue in the scene state.
 Do not include goals, intentions, thoughts, feelings, or emotions of any character.`.trim();
 }
 
