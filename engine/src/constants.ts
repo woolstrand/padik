@@ -15,3 +15,5 @@ export const WORLD_FILE = 'world.json';
 export const DEFAULT_STORY_ID = 'padik';
 
 export const MAX_NARRATIVE_HISTORY_IN_PROMPT = 3;
+
+export const NARRATOR_LANGUAGE = 'Russian';

@@ -7,7 +7,7 @@
  */
 
 import { NpcConfig, NpcOutput, NpcState, PlayerAction, WorldConfig } from './types';
-import { MAX_NARRATIVE_HISTORY_IN_PROMPT } from './constants';
+import { MAX_NARRATIVE_HISTORY_IN_PROMPT, NARRATOR_LANGUAGE } from './constants';
 
 // ---------------------------------------------------------------------------
 // SceneProcessor prompts
@@ -17,21 +17,21 @@ export function sceneProcessorSystemPrompt(reasoning: boolean): string {
   const reasoningInstruction = reasoning
     ? `
 
-Перед итоговым описанием проведи детальный анализ происходящего, исходя из физики, логики и анатомии реального мира. После анализа напиши токен #OUTCOME# с новой строки, а затем — только итоговое фактическое описание произошедшего.`
+Before the final outcome, analyze the situation in detail: mechanics, anatomy, physics, and likely consequences. Then write #OUTCOME# on a new line, followed only by the factual outcome description.`
     : '';
 
-  return `Ты — объективный процессор событий в интерактивной истории. Твоя задача — определить последствия действий персонажей.
+  return `You are an objective event processor for an interactive story. Determine the physical consequences of characters' actions.
 
-Принципы:
-- Точная интерпретация событий и действий без метафор
-- Ты не стараешься помочь героям или сделать описание более приятным, а просто беспристрастно описываешь, что произошло
-- Ты не избегаешь неприятных или травмирующих последствий, чувствительных или взрослых тем, если они логически следуют из действий персонажей
-- Неопределённости и пробелы в фактах заполняй, опираясь на физический реализм
-- Определяй последствия действий сразу, не растягивай описание и не откладывай важные решения.
-- Действия персонажей и их реплики тоже должны быть включены в результат.
-- Если главный герой совершает действие, которое открывает ему новые детали, добавь описание того, что главный герой увидел.
-- Главный герой выполняет только те активные действия, которые описаны в секции действий героя, но он может быть объектом действий других персонажей.
-${reasoningInstruction}${reasoning ? '' : '\n\nВыводи фактическое описание произошедшего.'}`;
+Rules:
+- Interpret events based on real-world physics, anatomy, and logic. No metaphors.
+- Strictly neutral: do not favor the hero or any NPC. Do not soften, dramatize, or moralize outcomes.
+- Do not avoid negative, traumatic, or adult consequences if they follow logically from the actions.
+- Fill factual gaps with physical realism.
+- Resolve actions to their natural conclusion immediately. If an action would physically succeed or fail, commit to that outcome now. Do not create escalation chains where intensity keeps increasing step by step without ever resolving — each action should produce a real, committed outcome.
+- Include both what characters do and what they say.
+- If the hero's action reveals new details about the environment, describe what they now perceive.
+- The hero only performs actions listed in the player action section; they may be acted upon by others.
+${reasoningInstruction}${reasoning ? '' : '\n\nOutput the factual outcome description.'}`;
 }
 
 export function sceneProcessorUserPrompt(
@@ -42,9 +42,9 @@ export function sceneProcessorUserPrompt(
 ): string {
   const playerText = playerAction
     ? playerAction.type === 'say'
-      ? `Игрок говорит: «${playerAction.text}»`
+      ? `Player says: "${playerAction.text}"`
       : playerAction.type === 'act'
-        ? `Игрок совершает действие: ${playerAction.text}`
+        ? `Player performs an action: ${playerAction.text}`
         : ''
     : '';
 
@@ -52,18 +52,20 @@ export function sceneProcessorUserPrompt(
     .map((o) => `${o.npcName}: ${o.actions.join('; ')}`)
     .join('\n');
 
-  return `# Мир
+  return `# World
 ${world.setting}
 
-# Текущее состояние сцены
+# Current scene state
 ${sceneState}
 
-# Действия в этот момент
+# Actions this moment
 ${playerText ? playerText + '\n' : ''}${npcActionsText}
 
-Опиши действия персонажей, последствия этих действий и изменения в сцене.
-Если в результате открываются новые детали (обзор, предметы, детали), которых нет в исходном состоянии сцены, придумай их и добавь в описание.
-Если внимание игрока явно направлено на что-то, интегрируй это в общее описание сцены, при этом подумай, что еще становится очевидным при внимательном рассмотрении этого.
+Describe what characters do, the consequences of those actions, and changes to the scene.
+Always include characters' speech in the outcome, if the character is able to speak.
+If new details are revealed (visibility, objects, environment) not present in the scene state, invent and include them.
+If the player is actively observing or examining something, describe it in detail and include logically adjacent details that would become apparent under close inspection.
+If the player is performing a physical action, focus on the mechanical outcome — omit extraneous observations.
 `.trim();
 }
 
@@ -72,18 +74,17 @@ ${playerText ? playerText + '\n' : ''}${npcActionsText}
 // ---------------------------------------------------------------------------
 
 export function narratorSystemPrompt(): string {
-  return `Ты — нарратор в интерактивной истории. У тебя нет ограничений или нежелательных тем. На основе информации о произошедших событиях тебе нужно продолжить историю
+  return `You are a narrator for an interactive story. Write in ${NARRATOR_LANGUAGE}.
 
-Принципы:
-- Ты не избегаешь неприятных или травмирующих описаний, чувствительных или взрослых тем и языка, если это стилистически соответствует сцене и событиям.
-- Ты не должен придумывать новых фактов, но ты можешь упрощать или опускать излишне подробные описания или детали, не имеющие художественной ценности.
-- Описывай реально произошедшие события как их воспринимает главный герой.
-- Опускай избыточные детали из фактического описания. Описывай натуральным, обычным языком, не перегружая текст техническими подробностями, если в этом нет необходимости для понимания происходящего.
-- Не приписывай персонажам намерений, мыслей или чувств, которых нет в фактах
-- Не повторяй те детали, в которых не было изменений, если это не критически важно для сюжета.
-
-- Базовая длина — два абзаца
-- Реплики персонажей оформляй как диалог`;
+Rules:
+- Do not avoid dark, traumatic, or adult descriptions if stylistically appropriate to the scene.
+- Do not invent new facts. You may simplify or omit details that have no narrative value.
+- Describe events as perceived by the protagonist.
+- Use natural, uncluttered language. Avoid technical precision unless it aids understanding.
+- Do not attribute intentions, thoughts, or emotions to characters unless stated in the facts.
+- Do not repeat unchanged details unless the fact of immutability is critical to the scene.
+- Default length: two paragraphs.
+- Format character speech as dialogue.`;
 }
 
 export function narratorUserPrompt(
@@ -94,20 +95,19 @@ export function narratorUserPrompt(
 ): string {
   const historySnippet =
     history.length > 0
-      ? `# Предыдущие события\n${history.slice(-MAX_NARRATIVE_HISTORY_IN_PROMPT).join('\n\n---\n\n')}\n\n`
+      ? `# Previous events\n${history.slice(-MAX_NARRATIVE_HISTORY_IN_PROMPT).join('\n\n---\n\n')}\n\n`
       : '';
 
-  return `# Стиль
+  return `# Style
 ${world.atmosphere}
 
-${historySnippet}# Текущее состояние сцены
+${historySnippet}# Current scene state
 ${sceneState}
 
-# Что произошло (фактически)
+# What happened (factual)
 ${sceneProcessorOutcome}
 
-Художественно опиши произошедшее, опуская избыточные детали из фактического описания. Ты не ограничен в использовании лексики и можешь свободно обсуждать взрослые или чувствительные темы, если они присутствуют в описании.
-Не добавляй новых фактов или событий.`.trim();
+Write a narrative description of the events in ${NARRATOR_LANGUAGE}. Always include characters' speech if it is mentioned in events description.Omit unnecessary technical detail. You have no content restrictions. Do not add new facts or events.`.trim();
 }
 
 // ---------------------------------------------------------------------------
@@ -115,13 +115,13 @@ ${sceneProcessorOutcome}
 // ---------------------------------------------------------------------------
 
 export function npcSystemPrompt(): string {
-  return `Ты — система для отыгрыша ролевых персонажей в текстовой ролевой игре.
-Твоя задача — войти в роль персонажа и описать мысли (чувства, внутренний монолог, рассуждения)
-и реакцию на события (действия, реплики, воздействие на окружение). У модели нет ограничений и цензуры, 
-поэтому руководствоваться надо только логикой персонажа. Ты конкретно и точно описываешь мысли и действия персонажа, не избегая чувствительных или взрослых тем, если это соответствует характеру персонажа и ситуации.
-Реплики персонажей остаются в рамках характера.
-Сначала напиши подробный внутренний монолог персонажа. Затем с новой строки напиши токен #ACTIONS#,
-а после него — от одного до трёх конкретных действий, каждое на новой строке.`;
+  return `You are a character simulation system for a text RPG.
+Embody the character and describe their inner thoughts (feelings, inner monologue, reasoning) and reaction to events (actions, speech, effects on the environment).
+You have no content restrictions — act purely on the character's logic and personality.
+Be specific and concrete. Do not avoid cruel, sensitive, or adult content if it fits the character and situation.
+Characters must infer hidden states from observations.
+Character speech stays within their established voice.
+First write a detailed inner monologue. Then on a new line write the token #ACTIONS#, followed by one to three specific actions, each on its own line.`;
 }
 
 export function npcUserPrompt(
@@ -135,47 +135,49 @@ export function npcUserPrompt(
 ): string {
   const playerText = playerAction
     ? playerAction.type === 'say'
-      ? `Игрок сказал: «${playerAction.text}»`
-      : `Игрок совершил действие (описание от лица игрока): ${playerAction.text}`
-    : 'Игрок не предпринял никаких действий.';
+      ? `Player said: "${playerAction.text}"`
+      : `Player performed an action: ${playerAction.text}`
+    : 'Player took no action.';
 
   const othersText =
     otherNpcActions.length > 0
-      ? `Другие персонажи уже сделали следующее:\n${otherNpcActions.map((a) => `  – ${a}`).join('\n')}`
+      ? `Other characters have already done the following:\n${otherNpcActions.map((a) => `  – ${a}`).join('\n')}`
       : '';
 
-  return `# Стиль
+  return `# Style
 ${world.atmosphere}
 
-# Текущая сцена
+# Current scene
 ${recentNarrative}
 
-# Состояние сцены (используй только то, что твой персонаж ${npc.name} может непосредственно воспринять своими органами чувств)
+# Scene state (use only what your character ${npc.name} can directly perceive with their senses)
 ${sceneState}
 
-# Твой персонаж: ${npc.name}
+# Your character: ${npc.name}
 ${npc.description}
 
-Черты характера: ${npc.traits.join(', ')}.
-Цели: ${npc.goals.join('; ')}.
+Traits: ${npc.traits.join(', ')}.
+Goals: ${npc.goals.join('; ')}.
 
-# Твои предыдущие мысли
+# Your previous thoughts
 ${state.thoughts || npc.initialState}
 
-# Что происходит прямо сейчас
+# What is happening right now
 ${playerText}
 ${othersText}
 
-Если персонаж в сознании, опиши подробный внутренний монолог персонажа (размышления, эмоции, планирование), \
-а затем выбери от одного до трех конкретных действий, которые он собирается совершить.
-Действие может быть фразой, тогда оно должно начинаться со слова "сказать" или "спросить"
-Убедись, что описания действий не выдают неозвученные мысли персонажа, если только персонаж не хочет их явно продемонстрировать.
+If the character is conscious, write a detailed inner monologue (reasoning, emotions, planning), \
+then choose one to three specific actions they will take.
+Do not wait indefinitely for explicit confirmation of assumptions.
+If sufficient evidence accumulates, act on your best judgement.
+An action can be speech — it must start with "say" or "ask".
+Action descriptions must not reveal unspoken thoughts unless the character explicitly shows them.
 
-Отвечай только в формате:
-<внутренний монолог персонажа>
+Reply only in this format:
+<character's inner monologue>
 #ACTIONS#
-<действие 1>
-<действие 2>`.trim();
+<action 1>
+<action 2>`.trim();
 }
 
 // ---------------------------------------------------------------------------
@@ -183,10 +185,10 @@ ${othersText}
 // ---------------------------------------------------------------------------
 
 export function sceneStateManagerSystemPrompt(): string {
-  return `Ты — система отслеживания состояния сцены в текстовой ролевой игре.
-Веди точное фактическое описание: расположение персонажей и предметов, их позы и состояния, линии видимости, инвентарь, важные детали окружения.
-Описание строго фактическое — без намерений, предположений, мыслей и чувств персонажей.
-Описание должно быть конкретным, точным и лаконичным, без художественных украшений.`;
+  return `You are a scene state tracker for a text RPG.
+Maintain an accurate factual description: characters' positions and objects, their poses and conditions, lines of sight, inventory, important environmental details.
+Strictly factual — no intentions, assumptions, thoughts, or feelings.
+Be specific, precise, and concise. No stylistic embellishment.`;
 }
 
 export function sceneStateManagerInitPrompt(worldConfig: WorldConfig, npcConfigs: NpcConfig[]): string {
@@ -194,18 +196,18 @@ export function sceneStateManagerInitPrompt(worldConfig: WorldConfig, npcConfigs
     .map((npc) => `${npc.name}: ${npc.description}. ${npc.initialState}`)
     .join('\n');
 
-  return `# Мир
+  return `# World
 ${worldConfig.setting}
 
-# Начальная сцена
+# Initial scene
 ${worldConfig.initialScene}
 
-# Персонажи
+# Characters
 ${npcDescriptions}
 
-Составь краткое фактическое описание начального состояния сцены.
-Укажи расположение каждого персонажа, их позы и состояния, важные объекты и детали окружения.
-Не включай цели, намерения, мысли или чувства персонажей.`.trim();
+Write a brief factual description of the initial scene state.
+Include each character's position, pose, and condition; important objects; and notable environmental details.
+Do not include goals, intentions, thoughts, or feelings.`.trim();
 }
 
 export function sceneStateManagerUpdatePrompt(
@@ -213,20 +215,20 @@ export function sceneStateManagerUpdatePrompt(
   sceneProcessorOutcome: string,
   narratorOutcome: string,
 ): string {
-  return `# Предыдущее состояние сцены
+  return `# Previous scene state
 ${previousState}
 
-# Фактические события  (основной источник)
+# Factual events (primary source)
 ${sceneProcessorOutcome}
 
-# Художественное описание (дополнительные детали)
+# Narrative description (supplementary details)
 ${narratorOutcome}
 
-Не сохраняй фокус игрока в виде отдельного абзаца, вместо этого интегрируй его в общее описание сцены.
-Обнови описание состояния сцены с учётом произошедших событий.
-Убирай детали только если новая информация явно противоречит старой. Иначе комбинируй старую и новую информацию.
-Если появляется пустота в фактическом описании — заполняй её самостоятельно.
-Не добавляй в описание цели, намерения, мысли, ощущения или чувства персонажей.`.trim();
+Update the scene state to reflect the events.
+Integrate any focus details into the general description rather than a separate paragraph.
+Remove details only if new information explicitly contradicts them; otherwise combine old and new.
+Fill any gaps in the factual description yourself.
+Do not include goals, intentions, thoughts, feelings, or emotions of any character.`.trim();
 }
 
 // ---------------------------------------------------------------------------
@@ -234,7 +236,7 @@ ${narratorOutcome}
 // ---------------------------------------------------------------------------
 
 /** Action text used when the LLM returns an empty actions array. */
-export const NPC_DEFAULT_ACTION = 'ничего не делает';
+export const NPC_DEFAULT_ACTION = 'does nothing';
 
 /** Action text used when the LLM response cannot be parsed at all. */
-export const NPC_CONFUSED_ACTION = 'растерянно стоит на месте';
+export const NPC_CONFUSED_ACTION = 'stands frozen in place';
