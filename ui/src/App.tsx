@@ -3,7 +3,7 @@ import { NarratorOutput } from './components/NarratorOutput';
 import { PlayerInput } from './components/PlayerInput';
 import { DebugPanel } from './components/DebugPanel';
 import { fetchInitialState, fetchStories, sendActionStream, fetchDebugData, startSession, retryActionStream, cancelTurn } from './api';
-import { NpcDebugData, StoryInfo, ChatEntry } from './types';
+import { NpcDebugData, StoryInfo, ChatEntry, StoryHistoryEntry } from './types';
 import './App.css';
 
 export function App() {
@@ -23,10 +23,8 @@ export function App() {
   const [hasLastTurn, setHasLastTurn] = useState(false);
   /** Current factual scene state from SceneManager. */
   const [sceneState, setSceneState] = useState<string>('');
-  /** History of SceneProcessor factual outcomes. */
-  const [sceneProcessorHistory, setSceneProcessorHistory] = useState<string[]>([]);
-  /** History of SceneProcessor reasoning (parallel to sceneProcessorHistory). */
-  const [sceneProcessorReasoningHistory, setSceneProcessorReasoningHistory] = useState<string[]>([]);
+  /** Unified chronological history of event and observation turns (for debug panel). */
+  const [storyHistory, setStoryHistory] = useState<StoryHistoryEntry[]>([]);
 
   const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -44,8 +42,7 @@ export function App() {
             : [{ type: 'narrative' as const, text: state.worldConfig.initialScene }];
         setChatEntries(entries);
         setSceneState(state.sceneState ?? '');
-        setSceneProcessorHistory(state.sceneProcessorHistory ?? []);
-        setSceneProcessorReasoningHistory(state.sceneProcessorReasoningHistory ?? []);
+        setStoryHistory(state.storyHistory ?? []);
       })
       .catch((err: unknown) => {
         const msg = err instanceof Error ? err.message : String(err);
@@ -70,8 +67,7 @@ export function App() {
       setDebugData([]);
       setHasLastTurn(false);
       setSceneState(state.sceneState ?? '');
-      setSceneProcessorHistory(state.sceneProcessorHistory ?? []);
-      setSceneProcessorReasoningHistory(state.sceneProcessorReasoningHistory ?? []);
+      setStoryHistory(state.storyHistory ?? []);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       setError(`Не удалось запустить новую сессию: ${msg}`);
@@ -80,7 +76,7 @@ export function App() {
     }
   }
 
-  async function processAction(type: 'act' | 'say' | 'skip', text: string) {
+  async function processAction(type: 'act' | 'say' | 'skip' | 'observe', text: string) {
     // Record player input in chat history immediately
     const playerEntryType = `player-${type}` as ChatEntry['type'];
     setChatEntries((prev) => [...prev, { type: playerEntryType, text }]);
@@ -104,8 +100,7 @@ export function App() {
           setChatEntries((prev) => [...prev, { type: 'narrative', text: event.narrative }]);
           setHasLastTurn(true);
           setSceneState(event.sceneState);
-          setSceneProcessorHistory(event.sceneProcessorHistory ?? []);
-          setSceneProcessorReasoningHistory(event.sceneProcessorReasoningHistory ?? []);
+          setStoryHistory(event.storyHistory ?? []);
           setStreamingEntry(undefined);
           setProgressMessage(undefined);
           // Refresh debug data after each turn
@@ -162,8 +157,7 @@ export function App() {
         } else if (event.type === 'done') {
           setChatEntries((prev) => [...prev, { type: 'narrative', text: event.narrative }]);
           setSceneState(event.sceneState);
-          setSceneProcessorHistory(event.sceneProcessorHistory ?? []);
-          setSceneProcessorReasoningHistory(event.sceneProcessorReasoningHistory ?? []);
+          setStoryHistory(event.storyHistory ?? []);
           setStreamingEntry(undefined);
           setProgressMessage(undefined);
           const debug = await fetchDebugData();
@@ -244,6 +238,7 @@ export function App() {
           <PlayerInput
             onAct={(text) => processAction('act', text)}
             onSay={(text) => processAction('say', text)}
+            onObserve={(text) => processAction('observe', text)}
             onSkip={() => processAction('skip', '')}
             onRetry={() => void handleRetry()}
             onCancel={handleCancel}
@@ -256,8 +251,7 @@ export function App() {
       <DebugPanel
         data={debugData}
         sceneState={sceneState}
-        sceneProcessorHistory={sceneProcessorHistory}
-        sceneProcessorReasoningHistory={sceneProcessorReasoningHistory}
+        storyHistory={storyHistory}
         isOpen={isDebugOpen}
         onToggle={() => setIsDebugOpen((v) => !v)}
       />

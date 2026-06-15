@@ -92,3 +92,13 @@
   border-color: var(--color-accent);
   color: var(--color-accent);
 }
+
+.btn-observe {
+  border-color: #5ba85b;
+  color: #5ba85b;
+}
+
+.btn-observe:hover:not(:disabled) {
+  background: #5ba85b;
+  color: var(--color-bg);
+}

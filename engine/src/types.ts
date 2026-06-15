@@ -41,8 +41,7 @@ export interface TurnDoneEvent {
   narrative: string;
   npcOutputs: NpcOutput[];
   sceneState: string;
-  sceneProcessorHistory: string[];
-  sceneProcessorReasoningHistory: string[];
+  storyHistory: StoryHistoryEntry[];
 }
 
 export interface TurnErrorEvent {
@@ -80,10 +79,22 @@ export interface NpcState {
   lastActions: string[];
 }
 
+export interface StoryHistoryEntry {
+  /** 'event' = normal/skip turn (SceneProcessor output); 'observation' = player observe action. */
+  kind: 'event' | 'observation';
+  /** 0-indexed turn number when this entry was produced. */
+  turn: number;
+  /** Factual text — SceneProcessor outcome or ObservationProcessor output. */
+  text: string;
+  /** Pre-outcome reasoning, only present for 'event' entries when SCENE_PROCESSOR_REASONING is enabled. */
+  reasoning?: string;
+}
+
 export interface GameState {
   narrativeHistory: string[];
   sceneProcessorHistory: string[];
   sceneProcessorReasoningHistory: string[];
+  storyHistory: StoryHistoryEntry[];
   npcStates: Map<string, NpcState>;
   worldConfig: WorldConfig;
   turnCount: number;
@@ -100,7 +111,7 @@ export interface NpcOutput {
   actions: string[];
 }
 
-export type PlayerActionType = 'act' | 'say' | 'skip';
+export type PlayerActionType = 'act' | 'say' | 'skip' | 'observe';
 
 export interface PlayerAction {
   type: PlayerActionType;

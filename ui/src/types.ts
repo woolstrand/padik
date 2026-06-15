@@ -1,7 +1,7 @@
 // Shared types mirrored from the engine.
 // Keep in sync with engine/src/types.ts.
 
-export type PlayerActionType = 'act' | 'say' | 'skip';
+export type PlayerActionType = 'act' | 'say' | 'skip' | 'observe';
 
 export interface PlayerAction {
   type: PlayerActionType;
@@ -40,14 +40,20 @@ export interface WorldConfig {
   playerDescription: string;
 }
 
+export interface StoryHistoryEntry {
+  kind: 'event' | 'observation';
+  turn: number;
+  text: string;
+  reasoning?: string;
+}
+
 export interface GameStateSnapshot {
   narrativeHistory: string[];
   turnCount: number;
   worldConfig: WorldConfig;
   storyId: string;
   sceneState: string;
-  sceneProcessorHistory: string[];
-  sceneProcessorReasoningHistory: string[];
+  storyHistory: StoryHistoryEntry[];
 }
 
 export interface StoryInfo {
@@ -60,7 +66,7 @@ export interface StoryListResponse {
 }
 
 export interface ChatEntry {
-  type: 'narrative' | 'player-act' | 'player-say' | 'player-skip';
+  type: 'narrative' | 'player-act' | 'player-say' | 'player-skip' | 'player-observe';
   text: string;
 }
 
@@ -88,8 +94,7 @@ export interface TurnDoneEvent {
   narrative: string;
   npcOutputs: NpcOutput[];
   sceneState: string;
-  sceneProcessorHistory: string[];
-  sceneProcessorReasoningHistory: string[];
+  storyHistory: StoryHistoryEntry[];
 }
 
 export interface TurnErrorEvent {

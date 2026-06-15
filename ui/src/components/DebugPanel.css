@@ -253,3 +253,21 @@
   word-break: break-word;
   overflow-y: auto;
 }
+
+/* ── Story history tags ────────────────────────────────────────────────── */
+.debug-scene__history-tag {
+  display: inline-block;
+  margin-left: 0.5em;
+  font-size: 0.6rem;
+  letter-spacing: 0.08em;
+  padding: 0.1em 0.45em;
+  border-radius: 2px;
+  vertical-align: middle;
+  text-transform: lowercase;
+}
+
+.debug-scene__history-tag--observation {
+  background: rgba(91, 168, 91, 0.15);
+  border: 1px solid rgba(91, 168, 91, 0.35);
+  color: #5ba85b;
+}

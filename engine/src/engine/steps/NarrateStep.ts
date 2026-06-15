@@ -1,4 +1,5 @@
 import { PipelineStep, WorldConfig } from '../../types';
+import { NarratorMode } from '../../prompts';
 import { Narrator } from '../Narrator';
 
 export interface NarrateStepInput {
@@ -6,6 +7,7 @@ export interface NarrateStepInput {
   narrativeHistory: string[];
   sceneState: string;
   sceneProcessorOutcome: string;
+  mode: NarratorMode;
 }
 
 /**
@@ -25,6 +27,7 @@ export class NarrateStep implements PipelineStep<NarrateStepInput, string> {
       input.narrativeHistory,
       input.sceneState,
       input.sceneProcessorOutcome,
+      input.mode,
     );
   }
 
@@ -34,6 +37,7 @@ export class NarrateStep implements PipelineStep<NarrateStepInput, string> {
       input.narrativeHistory,
       input.sceneState,
       input.sceneProcessorOutcome,
+      input.mode,
     );
   }
 }

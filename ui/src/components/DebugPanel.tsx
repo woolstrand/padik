@@ -1,12 +1,11 @@
 import { useState } from 'react';
-import { NpcDebugData } from '../types';
+import { NpcDebugData, StoryHistoryEntry } from '../types';
 import './DebugPanel.css';
 
 interface DebugPanelProps {
   data: NpcDebugData[];
   sceneState: string;
-  sceneProcessorHistory: string[];
-  sceneProcessorReasoningHistory: string[];
+  storyHistory: StoryHistoryEntry[];
   isOpen: boolean;
   onToggle: () => void;
 }
@@ -22,7 +21,7 @@ interface DebugPanelProps {
  *   - "Состояние" — current SceneManager state
  *   - "История" — chronological SceneProcessor factual outcomes
  */
-export function DebugPanel({ data, sceneState, sceneProcessorHistory, sceneProcessorReasoningHistory, isOpen, onToggle }: DebugPanelProps) {
+export function DebugPanel({ data, sceneState, storyHistory, isOpen, onToggle }: DebugPanelProps) {
   const [selectedNpcId, setSelectedNpcId] = useState<string | null>(null);
   const [sceneTab, setSceneTab] = useState<'state' | 'history'>('state');
 
@@ -112,28 +111,27 @@ export function DebugPanel({ data, sceneState, sceneProcessorHistory, sceneProce
               />
             ) : (
               <div className="debug-scene__history">
-                {sceneProcessorHistory.length === 0 ? (
+                {storyHistory.length === 0 ? (
                   <p className="debug-scene__history-empty">Ходов пока нет.</p>
                 ) : (
-                                [...sceneProcessorHistory].reverse().map((entry, i) => {
-                  const turnIndex = sceneProcessorHistory.length - 1 - i;
-                  const reasoning = sceneProcessorReasoningHistory[turnIndex];
-                  return (
+                  [...storyHistory].reverse().map((entry, i) => (
                     <div key={i} className="debug-scene__history-entry">
                       <div className="debug-scene__history-turn">
-                        Ход {turnIndex + 1}
+                        Ход {entry.turn + 1}
+                        {entry.kind === 'observation' && (
+                          <span className="debug-scene__history-tag debug-scene__history-tag--observation">наблюдение</span>
+                        )}
                       </div>
-                      {reasoning && (
+                      {entry.kind === 'event' && entry.reasoning && (
                         <>
                           <div className="debug-step__section-label">Рассуждение</div>
-                          <pre className="debug-step__text debug-step__text--muted">{reasoning}</pre>
+                          <pre className="debug-step__text debug-step__text--muted">{entry.reasoning}</pre>
                           <div className="debug-step__section-label">Итог</div>
                         </>
                       )}
-                      <pre className="debug-step__text">{entry}</pre>
+                      <pre className="debug-step__text">{entry.text}</pre>
                     </div>
-                  );
-                })
+                  ))
                 )}
               </div>
             )}

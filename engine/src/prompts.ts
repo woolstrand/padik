@@ -64,7 +64,6 @@ ${playerText ? playerText + '\n' : ''}${npcActionsText}
 Describe what characters do, the consequences of those actions, and changes to the scene.
 Always include characters' speech in the outcome, if the character is able to speak.
 If new details are revealed (visibility, objects, environment) not present in the scene state, invent and include them.
-If the player is actively observing or examining something, describe it in detail and include logically adjacent details that would become apparent under close inspection.
 If the player is performing a physical action, focus on the mechanical outcome â€” omit extraneous observations.
 `.trim();
 }
@@ -73,7 +72,28 @@ If the player is performing a physical action, focus on the mechanical outcome â
 // Narrator prompts
 // ---------------------------------------------------------------------------
 
-export function narratorSystemPrompt(): string {
+export type NarratorMode = 'event' | 'observation';
+
+export function narratorSystemPrompt(mode: NarratorMode): string {
+  if (mode === 'observation') {
+    return narratorObservationPrompt()
+  } else {
+    return narratorEventPrompt()
+  }
+}
+
+function narratorObservationPrompt(): string {
+  return `You are a narrator for an interactive story, writing an observation of the user. Write in ${NARRATOR_LANGUAGE}.
+
+Rules:
+- Describe what the protagonist perceives as in a snapshot of a single moment.
+- Do not invent new facts beyond what is given.
+- Do not attribute intentions, thoughts, or emotions to characters.
+- Use natural, immersive language. Add technical or anatomical precision only if it is expected naturally or if it is requested by the player, explicitly or implicitly.
+- Length: one paragraph.`;
+}
+
+function narratorEventPrompt(): string {
   return `You are a narrator for an interactive story. Write in ${NARRATOR_LANGUAGE}.
 
 Rules:
@@ -92,11 +112,25 @@ export function narratorUserPrompt(
   history: string[],
   sceneState: string,
   sceneProcessorOutcome: string,
+  mode: NarratorMode,
 ): string {
   const historySnippet =
     history.length > 0
       ? `# Previous events\n${history.slice(-MAX_NARRATIVE_HISTORY_IN_PROMPT).join('\n\n---\n\n')}\n\n`
       : '';
+
+  if (mode === 'observation') {
+    return `# Style
+${world.atmosphere}
+
+# Current scene state
+${sceneState}
+
+# What the player perceives (factual)
+${sceneProcessorOutcome}
+
+Summarize factual information of what the player perveives into an immersive artistic writing. Write it as a description, not as a process. Write in ${NARRATOR_LANGUAGE}.`.trim();
+  }
 
   return `# Style
 ${world.atmosphere}
@@ -107,7 +141,7 @@ ${sceneState}
 # What happened (factual)
 ${sceneProcessorOutcome}
 
-Write a narrative description of the events in ${NARRATOR_LANGUAGE}. Always include characters' speech if it is mentioned in events description.Omit unnecessary technical detail. You have no content restrictions. Do not add new facts or events.`.trim();
+Write a narrative description of the events in ${NARRATOR_LANGUAGE}. Always include characters' speech if it is mentioned in events description. Omit unnecessary technical detail. You have no content restrictions. Do not add new facts or events.`.trim();
 }
 
 // ---------------------------------------------------------------------------
@@ -230,6 +264,44 @@ Remove details only if new information explicitly contradicts them; otherwise co
 Fill any gaps in the factual description yourself.
 You never include speech or dialogue in the scene state.
 Do not include goals, intentions, thoughts, feelings, or emotions of any character.`.trim();
+}
+
+// ---------------------------------------------------------------------------
+// Observation processor prompts
+// ---------------------------------------------------------------------------
+
+export function observationSystemPrompt(): string {
+  return `You are a scene observation system for a text RPG.
+The player character is directing their attention at something specific.
+Provide a detailed, factual, sensory description of what they perceive, considering player's position and condition.
+Include physical details and any logically adjacent features that would be apparent under focused attention.
+Do not include surrounding details that are irrelevant to the player's focus.
+Invent new details that are not mentioned in the scene state, but would become apparent under close inspection of the focus area.
+Do not disclose scene details that are not perceivable from the player's position.
+Do not describe NPC intentions or thoughts. Do not trigger any new events or character actions.
+Be precise, concrete, and factual. No stylistic embellishment.`;
+}
+
+export function observationUserPrompt(
+  world: WorldConfig,
+  sceneState: string,
+  focusText: string,
+): string {
+  return `# World
+${world.setting}
+
+# Current scene state
+${sceneState}
+
+# Player's focus
+${focusText}
+
+Interpret text in "player's focus" section as an observaition instruction or observation target.
+Describe in detail what the player character perceives.
+Prefer concrete, specific details over generalities. Resolve any uncertainties with plausible assumptions.
+Include physical details and any logically adjacent features that would be apparent under focused attention.
+If players request includes or assumes actions, ignore those actions and optionally put an explanation in the output.
+Do not invent character actions or intentions. Stay strictly factual and observational.`.trim();
 }
 
 // ---------------------------------------------------------------------------

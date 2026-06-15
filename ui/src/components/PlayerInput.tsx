@@ -4,6 +4,7 @@ import './PlayerInput.css';
 interface PlayerInputProps {
   onAct: (text: string) => void;
   onSay: (text: string) => void;
+  onObserve: (text: string) => void;
   onSkip: () => void;
   onRetry: () => void;
   onCancel: () => void;
@@ -20,7 +21,7 @@ interface PlayerInputProps {
  *
  * Ctrl+Enter submits with the last-used button (defaults to Act).
  */
-export function PlayerInput({ onAct, onSay, onSkip, onRetry, onCancel, canRetry, disabled }: PlayerInputProps) {
+export function PlayerInput({ onAct, onSay, onObserve, onSkip, onRetry, onCancel, canRetry, disabled }: PlayerInputProps) {
   const [text, setText] = useState('');
 
   function handleAct() {
@@ -32,6 +33,12 @@ export function PlayerInput({ onAct, onSay, onSkip, onRetry, onCancel, canRetry,
   function handleSay() {
     if (!text.trim()) return;
     onSay(text.trim());
+    setText('');
+  }
+
+  function handleObserve() {
+    if (!text.trim()) return;
+    onObserve(text.trim());
     setText('');
   }
 
@@ -70,6 +77,14 @@ export function PlayerInput({ onAct, onSay, onSkip, onRetry, onCancel, canRetry,
           title="Сказать вслух"
         >
           Сказать
+        </button>
+        <button
+          className="btn btn-observe"
+          onClick={handleObserve}
+          disabled={disabled || !text.trim()}
+          title="Внимательно осмотреть"
+        >
+          Наблюдать
         </button>
         <button
           className="btn btn-skip"

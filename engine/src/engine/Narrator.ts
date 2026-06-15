@@ -1,5 +1,5 @@
 import { ILlmClient, WorldConfig } from '../types';
-import { narratorSystemPrompt, narratorUserPrompt } from '../prompts';
+import { NarratorMode, narratorSystemPrompt, narratorUserPrompt } from '../prompts';
 
 /**
  * Narrator — produces the artistic story prose that the player reads.
@@ -16,12 +16,13 @@ export class Narrator {
     narrativeHistory: string[],
     sceneState: string,
     sceneProcessorOutcome: string,
+    mode: NarratorMode = 'event',
   ): Promise<string> {
     const messages = [
-      { role: 'system' as const, content: narratorSystemPrompt() },
+      { role: 'system' as const, content: narratorSystemPrompt(mode) },
       {
         role: 'user' as const,
-        content: narratorUserPrompt(worldConfig, narrativeHistory, sceneState, sceneProcessorOutcome),
+        content: narratorUserPrompt(worldConfig, narrativeHistory, sceneState, sceneProcessorOutcome, mode),
       },
     ];
 
@@ -33,12 +34,13 @@ export class Narrator {
     narrativeHistory: string[],
     sceneState: string,
     sceneProcessorOutcome: string,
+    mode: NarratorMode = 'event',
   ): AsyncIterable<string> {
     const messages = [
-      { role: 'system' as const, content: narratorSystemPrompt() },
+      { role: 'system' as const, content: narratorSystemPrompt(mode) },
       {
         role: 'user' as const,
-        content: narratorUserPrompt(worldConfig, narrativeHistory, sceneState, sceneProcessorOutcome),
+        content: narratorUserPrompt(worldConfig, narrativeHistory, sceneState, sceneProcessorOutcome, mode),
       },
     ];
 

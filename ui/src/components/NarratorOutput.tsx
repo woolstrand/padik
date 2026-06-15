@@ -14,6 +14,7 @@ const PLAYER_LABELS: Record<string, string> = {
   'player-act': 'Действие',
   'player-say': 'Речь',
   'player-skip': 'Пропуск',
+  'player-observe': 'Наблюдение',
 };
 
 /**

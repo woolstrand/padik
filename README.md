@@ -8,53 +8,6 @@ Watch — or intervene — as a grumpy old lady tries to reclaim her beloved ben
 
 ---
 
-## Architecture
-
-```
-padik/
-├── engine/          # TypeScript / Express game engine
-│   └── src/
-│       ├── constants.ts          – hardcoded config values
-│       ├── types.ts              – shared domain types + ILlmClient interface
-│       ├── llm/
-│       │   └── LlmClient.ts      – LLM interaction layer (wraps LM Studio API)
-│       ├── engine/
-│       │   ├── NpcProcessor.ts   – per-NPC prompt builder + response parser
-│       │   ├── Narrator.ts       – story narrator
-│       │   └── Orchestrator.ts   – data-flow coordinator
-│       └── index.ts              – Express server + dependency wiring
-├── ui/              # React / Vite frontend
-│   └── src/
-│       ├── main.tsx
-│       ├── App.tsx
-│       ├── api.ts                – typed fetch wrappers
-│       └── components/
-│           ├── NarratorOutput    – scrollable narrative log
-│           └── PlayerInput       – textarea + Act / Say / Skip buttons
-└── userdata/
-    └── stories/
-        └── padik/                # default story data
-            ├── world.json
-            ├── npc_babushka.json
-            └── npc_punk.json
-```
-
-Custom stories live in `userdata/stories/<story-id>/` and should contain:
-
-- `world.json`
-- one or more NPC files named `npc_*.json`
-
-On the main page, choose a story and confirm to start a fresh session from that folder.
-The last selected story is persisted across reloads and server restarts.
-
-### Design principles
-
-* **Separation of concerns** — LLM layer, NPC processing, narration, orchestration, and UI are each their own module with a single responsibility.
-* **Dependency injection** — every class receives its collaborators via constructor parameters; no singletons or globals except the composition root (`index.ts`).
-* **Prompt-from-scratch** — each NPC prompt is built fresh every turn to keep LLM context usage low.  Only the NPC's previous *thoughts* are carried forward.
-
----
-
 ## Prerequisites
 
 | Tool | Purpose |
@@ -105,13 +58,32 @@ You are a bystander.  Each turn you can:
 |--------|--------|
 | **Действие** | Describe a physical action your character takes |
 | **Сказать** | Say something out loud |
+| **Наблюдать** | Examine something closely — NPCs don't react, revealed details are remembered |
 | **Пропустить** | Watch without acting — the scene advances on its own |
+| **Повторить** | Re-run the last turn with fresh LLM responses |
+| **Стоп** | Cancel the turn currently being processed |
+
+---
+
+## Choosing and adding stories
+
+On the main page, pick a story from the dropdown and press **Начать сессию** to start a fresh
+session from that folder.  The last selected story is remembered across reloads and server
+restarts.
+
+Custom stories live in `userdata/stories/<story-id>/` and must contain:
+
+- `world.json` — the setting, atmosphere, opening scene, and player description
+- one or more NPC files named `npc_*.json`
+
+See [docs/architecture/story-data.md](docs/architecture/story-data.md) for the full JSON
+format.
 
 ---
 
 ## Configuration
 
-All constants are in [`engine/src/constants.ts`](engine/src/constants.ts):
+All runtime settings are in [`engine/src/constants.ts`](engine/src/constants.ts):
 
 ```ts
 export const LLM_BASE_URL = 'http://localhost:1234/v1';
@@ -119,3 +91,11 @@ export const LLM_MODEL    = 'local-model';   // model name shown in LM Studio
 ```
 
 Change `LLM_MODEL` to match the identifier displayed in LM Studio's model selector.
+
+---
+
+## For developers & AI agents
+
+Architecture and subsystem documentation lives under
+[`.github/copilot-instructions.md`](.github/copilot-instructions.md) (auto-loaded by Copilot)
+and [`docs/architecture/`](docs/architecture/).  Start there before changing the code.
