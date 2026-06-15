@@ -1,5 +1,6 @@
 import { ILlmClient, NpcConfig, NpcOutput, NpcState, PlayerAction, WorldConfig } from '../types';
 import { npcSystemPrompt, npcUserPrompt, NPC_DEFAULT_ACTION, NPC_CONFUSED_ACTION } from '../prompts';
+import { NPC_ACTIONS_SEPARATOR } from '../constants';
 
 /**
  * NPC Processor — handles a single NPC turn.
@@ -50,10 +51,10 @@ export class NpcProcessor {
   }
 
   private parseResponse(raw: string, npc: NpcConfig): NpcOutput {
-    const separatorIndex = raw.indexOf('#ACTIONS#');
+    const separatorIndex = raw.indexOf(NPC_ACTIONS_SEPARATOR);
     if (separatorIndex !== -1) {
       const thoughts = raw.slice(0, separatorIndex).trim();
-      const actionsBlock = raw.slice(separatorIndex + '#ACTIONS#'.length).trim();
+      const actionsBlock = raw.slice(separatorIndex + NPC_ACTIONS_SEPARATOR.length).trim();
       const actions = actionsBlock
         .split('\n')
         .map((line) => line.replace(/^[-*•]\s*/, '').trim())

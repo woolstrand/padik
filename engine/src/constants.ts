@@ -17,3 +17,14 @@ export const DEFAULT_STORY_ID = 'padik';
 export const MAX_NARRATIVE_HISTORY_IN_PROMPT = 3;
 
 export const NARRATOR_LANGUAGE = 'Russian';
+
+// ---------------------------------------------------------------------------
+// LLM response separator tokens — must match the prompts in prompts.ts and
+// the parsers in NpcProcessor / SceneProcessor.
+// ---------------------------------------------------------------------------
+
+/** Separates NPC inner monologue from the actions block in NPC responses. */
+export const NPC_ACTIONS_SEPARATOR = '#ACTIONS#';
+
+/** Separates SceneProcessor reasoning from the factual outcome (used when reasoning is enabled). */
+export const SCENE_OUTCOME_SEPARATOR = '#OUTCOME#';

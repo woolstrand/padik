@@ -13,12 +13,12 @@
 
 ## High severity
 
-### H1 — Domain types duplicated between engine and UI
-`engine/src/types.ts` and `ui/src/types.ts` are maintained by hand with no shared package.
-- (a) ⬤ Every type change is a two-file edit; silent drift breaks the wire contract.
-- (b) ⬤ An agent must discover, read, and edit both files for any type change — pure token tax.
-- **Fix direction:** extract a `shared/` package (or generate UI types from engine types) and
-  import from one source of truth.
+### H1 — Domain types duplicated between engine and UI ✅ RESOLVED
+`ui/src/types.ts` is now a re-export layer: it re-exports all wire-format types from
+`engine/src/types.ts` (the single source of truth) and defines only `ChatEntry` locally.
+Engine-internal types (ILlmClient, PipelineStep, NpcConfig, NpcState, GameState, …) are not
+re-exported. API response shapes (`GameStateSnapshot`, `StoryListResponse`) have been moved
+to `engine/src/types.ts` and are used in `index.ts` to enforce the wire contract at compile time.
 
 ### H2 — Turn loop & commit logic duplicated in the Orchestrator
 `processTurn` and `processTurnStream` share `buildPipeline` but each re-implement the
@@ -56,13 +56,10 @@ Orchestrator-owned mutable state.
 - **Fix direction:** flow typed outputs through a per-turn context object passed step→step, or
   let each step return its output and have the loop thread it forward.
 
-### M2 — Parser contracts split between prompts and processors
-The separator tokens `#ACTIONS#` (NPC) and `#OUTCOME#` (SceneProcessor) are emitted by text in
-`prompts.ts` and re-declared as string literals in the processor classes.
-- (a) ◐ Changing a token means editing two files in lockstep.
-- (b) ◐ The contract is implicit; an agent must cross-reference prompt + parser.
-- **Fix direction:** export the separator constants from one module and reference them in both
-  the prompt builder and the parser.
+### M2 — Parser contracts split between prompts and processors ✅ RESOLVED
+`NPC_ACTIONS_SEPARATOR` (`#ACTIONS#`) and `SCENE_OUTCOME_SEPARATOR` (`#OUTCOME#`) are now
+exported from `engine/src/constants.ts` and referenced in `prompts.ts`, `NpcProcessor.ts`,
+and `SceneProcessor.ts`. Changing a separator token is now a single-file edit.
 
 ### M3 — Single mutable global session in the server
 `index.ts` holds one `orchestrator` / `currentStoryId`; starting a session replaces it.

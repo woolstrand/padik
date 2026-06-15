@@ -20,7 +20,7 @@ import {
   USERDATA_DIR,
   WORLD_FILE,
 } from './constants';
-import { NpcConfig, PlayerAction, StoryInfo, WorldConfig } from './types';
+import { GameStateSnapshot, NpcConfig, PlayerAction, StoryInfo, StoryListResponse, WorldConfig } from './types';
 
 function loadJson<T>(filepath: string): T {
   return JSON.parse(fs.readFileSync(filepath, 'utf-8')) as T;
@@ -251,22 +251,21 @@ app.post('/api/turn/cancel', (_req: Request, res: Response) => {
 
 app.get('/api/state', (_req: Request, res: Response) => {
   const state = orchestrator.getGameState();
-  res.json({
+  const snapshot: GameStateSnapshot = {
     narrativeHistory: state.narrativeHistory,
     turnCount: state.turnCount,
     worldConfig: state.worldConfig,
     storyId: currentStoryId,
     sceneState: orchestrator.getSceneState(),
     storyHistory: state.storyHistory,
-  });
+  };
+  res.json(snapshot);
 });
 
 app.get('/api/stories', (_req: Request, res: Response) => {
   const stories = listStories();
-  res.json({
-    stories,
-    selectedStoryId: currentStoryId,
-  });
+  const response: StoryListResponse = { stories, selectedStoryId: currentStoryId };
+  res.json(response);
 });
 
 app.post('/api/session/start', (req: Request, res: Response) => {
@@ -288,14 +287,15 @@ app.post('/api/session/start', (req: Request, res: Response) => {
     currentStoryId = storyId;
     writeSelectedStoryId(storyId);
     const state = orchestrator.getGameState();
-    res.json({
+    const snapshot: GameStateSnapshot = {
       narrativeHistory: state.narrativeHistory,
       turnCount: state.turnCount,
       worldConfig: state.worldConfig,
       storyId: currentStoryId,
       sceneState: orchestrator.getSceneState(),
       storyHistory: state.storyHistory,
-    });
+    };
+    res.json(snapshot);
   } catch (err) {
     console.error('Error starting session:', err);
     res.status(500).json({ error: 'Failed to start a new session.' });

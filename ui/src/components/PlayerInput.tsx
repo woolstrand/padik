@@ -84,7 +84,7 @@ export function PlayerInput({ onAct, onSay, onObserve, onSkip, onRetry, onCancel
           disabled={disabled || !text.trim()}
           title="Внимательно осмотреть"
         >
-          Наблюдать
+          Осмотреть
         </button>
         <button
           className="btn btn-skip"

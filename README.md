@@ -58,7 +58,7 @@ You are a bystander.  Each turn you can:
 |--------|--------|
 | **Действие** | Describe a physical action your character takes |
 | **Сказать** | Say something out loud |
-| **Наблюдать** | Examine something closely — NPCs don't react, revealed details are remembered |
+| **Осмотреть** | Examine something closely — NPCs don't react, revealed details are remembered |
 | **Пропустить** | Watch without acting — the scene advances on its own |
 | **Повторить** | Re-run the last turn with fresh LLM responses |
 | **Стоп** | Cancel the turn currently being processed |

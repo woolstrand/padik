@@ -1,110 +1,33 @@
-// Shared types mirrored from the engine.
-// Keep in sync with engine/src/types.ts.
+// Wire-format and API response types: single source of truth is engine/src/types.ts.
+// This file re-exports only the types that cross the HTTP/SSE boundary so that
+// UI code continues to import from './types' (or '../types') without change.
+// Internal engine types (ILlmClient, PipelineStep, NpcConfig, NpcState, GameState, …)
+// are intentionally NOT re-exported here.
+export type {
+  PlayerActionType,
+  PlayerAction,
+  NpcOutput,
+  TurnResult,
+  NpcDebugStep,
+  NpcDebugData,
+  WorldConfig,
+  StoryHistoryEntry,
+  StoryInfo,
+  StepStartEvent,
+  StepDoneEvent,
+  NarratorTokenEvent,
+  TurnDoneEvent,
+  TurnErrorEvent,
+  TurnStreamEvent,
+  GameStateSnapshot,
+  StoryListResponse,
+} from '../../engine/src/types';
 
-export type PlayerActionType = 'act' | 'say' | 'skip' | 'observe';
-
-export interface PlayerAction {
-  type: PlayerActionType;
-  text: string;
-}
-
-export interface NpcOutput {
-  npcId: string;
-  npcName: string;
-  thoughts: string;
-  actions: string[];
-}
-
-export interface TurnResult {
-  narrative: string;
-  npcOutputs: NpcOutput[];
-}
-
-export interface NpcDebugStep {
-  turn: number;
-  situation: string;
-  thoughts: string;
-  actions: string[];
-}
-
-export interface NpcDebugData {
-  npcId: string;
-  npcName: string;
-  steps: NpcDebugStep[];
-}
-
-export interface WorldConfig {
-  setting: string;
-  atmosphere: string;
-  initialScene: string;
-  playerDescription: string;
-}
-
-export interface StoryHistoryEntry {
-  kind: 'event' | 'observation';
-  turn: number;
-  text: string;
-  reasoning?: string;
-}
-
-export interface GameStateSnapshot {
-  narrativeHistory: string[];
-  turnCount: number;
-  worldConfig: WorldConfig;
-  storyId: string;
-  sceneState: string;
-  storyHistory: StoryHistoryEntry[];
-}
-
-export interface StoryInfo {
-  id: string;
-}
-
-export interface StoryListResponse {
-  stories: StoryInfo[];
-  selectedStoryId: string;
-}
+// ---------------------------------------------------------------------------
+// UI-only types — not part of the wire contract
+// ---------------------------------------------------------------------------
 
 export interface ChatEntry {
   type: 'narrative' | 'player-act' | 'player-say' | 'player-skip' | 'player-observe';
   text: string;
 }
-
-// ---------------------------------------------------------------------------
-// Streaming turn events — mirrors engine/src/types.ts TurnStreamEvent
-// ---------------------------------------------------------------------------
-
-export interface StepStartEvent {
-  type: 'step:start';
-  displayName: string;
-}
-
-export interface StepDoneEvent {
-  type: 'step:done';
-  displayName: string;
-}
-
-export interface NarratorTokenEvent {
-  type: 'narrator:token';
-  token: string;
-}
-
-export interface TurnDoneEvent {
-  type: 'done';
-  narrative: string;
-  npcOutputs: NpcOutput[];
-  sceneState: string;
-  storyHistory: StoryHistoryEntry[];
-}
-
-export interface TurnErrorEvent {
-  type: 'error';
-  message: string;
-}
-
-export type TurnStreamEvent =
-  | StepStartEvent
-  | StepDoneEvent
-  | NarratorTokenEvent
-  | TurnDoneEvent
-  | TurnErrorEvent;

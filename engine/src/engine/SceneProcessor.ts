@@ -1,5 +1,6 @@
 import { ILlmClient, NpcOutput, PlayerAction, WorldConfig } from '../types';
 import { sceneProcessorSystemPrompt, sceneProcessorUserPrompt } from '../prompts';
+import { SCENE_OUTCOME_SEPARATOR } from '../constants';
 
 /**
  * Toggle internal reasoning/thinking pass in SceneProcessor prompts.
@@ -8,8 +9,6 @@ import { sceneProcessorSystemPrompt, sceneProcessorUserPrompt } from '../prompts
  * flows downstream into the Narrator and SceneManager.
  */
 export const SCENE_PROCESSOR_REASONING = false;
-
-const OUTCOME_SEPARATOR = '#OUTCOME#';
 
 export interface SceneProcessorResult {
   /** Clean factual description — passed to Narrator, SceneManager, NPC context. */
@@ -52,15 +51,15 @@ export class SceneProcessor {
     const raw = await this.llmClient.complete(messages);
 
     if (SCENE_PROCESSOR_REASONING) {
-      const idx = raw.indexOf(OUTCOME_SEPARATOR);
+      const idx = raw.indexOf(SCENE_OUTCOME_SEPARATOR);
       if (idx !== -1) {
         return {
           reasoning: raw.slice(0, idx).trim(),
-          outcome: raw.slice(idx + OUTCOME_SEPARATOR.length).trim(),
+          outcome: raw.slice(idx + SCENE_OUTCOME_SEPARATOR.length).trim(),
         };
       }
       // Separator missing — treat entire response as outcome, log a warning.
-      console.warn('[SceneProcessor] #OUTCOME# separator not found in reasoning response.');
+      console.warn(`[SceneProcessor] ${SCENE_OUTCOME_SEPARATOR} separator not found in reasoning response.`);
     }
 
     return { outcome: raw.trim(), reasoning: null };

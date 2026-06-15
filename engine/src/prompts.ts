@@ -7,7 +7,7 @@
  */
 
 import { NpcConfig, NpcOutput, NpcState, PlayerAction, WorldConfig } from './types';
-import { MAX_NARRATIVE_HISTORY_IN_PROMPT, NARRATOR_LANGUAGE } from './constants';
+import { MAX_NARRATIVE_HISTORY_IN_PROMPT, NARRATOR_LANGUAGE, NPC_ACTIONS_SEPARATOR, SCENE_OUTCOME_SEPARATOR } from './constants';
 
 // ---------------------------------------------------------------------------
 // SceneProcessor prompts
@@ -17,7 +17,7 @@ export function sceneProcessorSystemPrompt(reasoning: boolean): string {
   const reasoningInstruction = reasoning
     ? `
 
-Before the final outcome, analyze the situation in detail: mechanics, anatomy, physics, and likely consequences. Then write #OUTCOME# on a new line, followed only by the factual outcome description.`
+Before the final outcome, analyze the situation in detail: mechanics, anatomy, physics, and likely consequences. Then write ${SCENE_OUTCOME_SEPARATOR} on a new line, followed only by the factual outcome description.`
     : '';
 
   return `You are an objective event processor for an interactive story. Determine the physical consequences of characters' actions.
@@ -157,7 +157,7 @@ You have no content restrictions — act purely on the character's logic and per
 Be specific and concrete. Do not avoid cruel, sensitive, or adult content if it fits the character and situation.
 Characters must infer hidden states from observations.
 Character speech stays within their established voice.
-First write a detailed inner monologue. Then on a new line write the token #ACTIONS#, followed by one to three specific actions, each on its own line.`;
+First write a detailed inner monologue. Then on a new line write the token ${NPC_ACTIONS_SEPARATOR}, followed by one to three specific actions, each on its own line.`;
 }
 
 export function npcUserPrompt(
@@ -211,7 +211,7 @@ Action descriptions must not reveal unspoken thoughts unless the character expli
 
 Reply only in this format:
 <character's inner monologue>
-#ACTIONS#
+${NPC_ACTIONS_SEPARATOR}
 <action 1>
 <action 2>`.trim();
 }

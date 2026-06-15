@@ -136,3 +136,23 @@ export interface NpcDebugData {
   npcName: string;
   steps: NpcDebugStep[];
 }
+
+// ---------------------------------------------------------------------------
+// HTTP API response shapes — constructed by the engine, consumed by the UI
+// ---------------------------------------------------------------------------
+
+/** Response body for GET /api/state and POST /api/session/start. */
+export interface GameStateSnapshot {
+  narrativeHistory: string[];
+  turnCount: number;
+  worldConfig: WorldConfig;
+  storyId: string;
+  sceneState: string;
+  storyHistory: StoryHistoryEntry[];
+}
+
+/** Response body for GET /api/stories. */
+export interface StoryListResponse {
+  stories: StoryInfo[];
+  selectedStoryId: string;
+}
