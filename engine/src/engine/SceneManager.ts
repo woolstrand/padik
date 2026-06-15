@@ -1,7 +1,6 @@
-import { ILlmClient, NpcConfig, WorldConfig } from '../types';
+import { ILlmClient } from '../types';
 import {
   sceneStateManagerSystemPrompt,
-  sceneStateManagerInitPrompt,
   sceneStateManagerUpdatePrompt,
 } from '../prompts';
 
@@ -10,37 +9,25 @@ import {
  *
  * Maintains a natural-language description of what is physically present and
  * happening in the scene: spatial layout, character and object positions,
- * poses, line-of-sight, inventory, etc.  No intentions, feelings or thoughts.
+ * poses, line-of-sight, inventory, appearance, health, etc.  No intentions,
+ * feelings or thoughts (those live in `NpcStateManager`).
  *
- * Initialised async from world + NPC descriptions; updated after each
- * narrator turn via an LLM call that merges previous state with new events.
+ * The starting state is built once by the `SessionLoader` and injected here, so
+ * this manager no longer touches story config or performs async init — it is
+ * ready to read synchronously from construction. After each narrator turn it is
+ * updated via an LLM call that merges the previous state with new events.
  */
 export class SceneStateManager {
-  private currentState: string = '';
-  private readonly initPromise: Promise<void>;
+  private currentState: string;
 
   constructor(
     private readonly llmClient: ILlmClient,
-    worldConfig: WorldConfig,
-    npcConfigs: NpcConfig[],
+    initialState: string,
   ) {
-    this.initPromise = this.initializeState(worldConfig, npcConfigs);
+    this.currentState = initialState;
   }
 
-  private async initializeState(worldConfig: WorldConfig, npcConfigs: NpcConfig[]): Promise<void> {
-    const messages = [
-      { role: 'system' as const, content: sceneStateManagerSystemPrompt() },
-      { role: 'user' as const, content: sceneStateManagerInitPrompt(worldConfig, npcConfigs) },
-    ];
-    this.currentState = (await this.llmClient.complete(messages)).trim();
-  }
-
-  /** Await this before the first turn to ensure the scene is initialised. */
-  async ensureInitialized(): Promise<void> {
-    await this.initPromise;
-  }
-
-  /** Synchronous read — always safe after ensureInitialized() has resolved. */
+  /** Synchronous read — always safe. */
   getCurrentState(): string {
     return this.currentState;
   }
@@ -53,8 +40,7 @@ export class SceneStateManager {
   /**
    * Call after each turn to merge the new events into the scene state.
    * Takes both the SceneProcessor factual outcome (primary) and the Narrator
-   * artistic output (secondary context).  Must not be called before
-   * ensureInitialized() resolves.
+   * artistic output (secondary context).
    */
   async update(sceneProcessorOutcome: string, narratorOutcome: string): Promise<void> {
     const messages = [

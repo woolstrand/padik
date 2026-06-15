@@ -1,4 +1,4 @@
-import { ILlmClient, NpcOutput, PlayerAction, WorldConfig } from '../types';
+import { ILlmClient, NpcOutput, PlayerAction, WorldRuntime } from '../types';
 import { sceneProcessorSystemPrompt, sceneProcessorUserPrompt } from '../prompts';
 import { SCENE_OUTCOME_SEPARATOR } from '../constants';
 
@@ -35,7 +35,7 @@ export class SceneProcessor {
   constructor(private readonly llmClient: ILlmClient) {}
 
   async process(
-    worldConfig: WorldConfig,
+    worldConfig: WorldRuntime,
     sceneState: string,
     playerAction: PlayerAction | null,
     npcOutputs: NpcOutput[],

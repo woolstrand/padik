@@ -17,7 +17,8 @@ LLM-facing text and model configuration. Everything above it depends on the `ILl
 |------|------|
 | `engine/src/llm/LlmClient.ts` | Concrete `ILlmClient` over LM Studio's OpenAI-compatible API |
 | `engine/src/types.ts` (`ILlmClient`, `Message`) | The abstraction all simulation modules use |
-| `engine/src/prompts.ts` | **All** prompt strings + narrative templates + fallback strings |
+| `engine/src/prompts.ts` | **All in-game** prompt strings + narrative templates + fallback strings |
+| `engine/src/loaderPrompts.ts` | Load-time prompts only (initial scene state); used by `SessionLoader` |
 | `engine/src/constants.ts` | Model/runtime tunables and file/path constants |
 
 ## `ILlmClient`
@@ -36,24 +37,31 @@ yields `delta.content` tokens. Construct it only in `engine/src/index.ts` and in
 To swap providers or add caching/retries, implement `ILlmClient` — do **not** change call
 sites in the simulation modules.
 
-## Prompts (`prompts.ts`)
+## Prompts (`prompts.ts` + `loaderPrompts.ts`)
 
-Every prompt is a pure function returning a string. Grouped by consumer:
+Every prompt is a pure function returning a string. In-game prompts live in `prompts.ts`,
+grouped by consumer:
 
 - **SceneProcessor**: `sceneProcessorSystemPrompt(reasoning)`, `sceneProcessorUserPrompt(...)`.
   The system prompt has an optional chain-of-thought branch gated by a boolean (see
   `SCENE_PROCESSOR_REASONING` in `SceneProcessor.ts`); reasoning output is separated by the
   `#OUTCOME#` token.
-- **Narrator**: `narratorSystemPrompt()`, `narratorUserPrompt(...)`. Writes in
+- **Narrator**: `narratorSystemPrompt(mode)`, `narratorUserPrompt(...)`. Writes in
   `NARRATOR_LANGUAGE`; instructed to add no new facts.
-- **NPC**: `npcSystemPrompt()`, `npcUserPrompt(...)`. Output is split on the `#ACTIONS#`
-  token into thoughts vs. actions (parsing lives in `NpcProcessor`).
-- **SceneManager**: `sceneStateManagerSystemPrompt()`, `...InitPrompt(...)`,
-  `...UpdatePrompt(...)`.
+- **NPC**: `npcSystemPrompt()`, `npcUserPrompt(inner, world, ...)` — takes the NPC's
+  `NpcInnerState` (persona + mind). Output is split on the `#ACTIONS#` token into thoughts
+  vs. actions (parsing lives in `NpcProcessor`).
+- **SceneManager**: `sceneStateManagerSystemPrompt()`, `sceneStateManagerUpdatePrompt(...)`.
+- **Observation**: `observationSystemPrompt()`, `observationUserPrompt(...)`.
 - **Fallback strings**: `NPC_DEFAULT_ACTION`, `NPC_CONFUSED_ACTION`.
 
+Load-time prompts live separately in `loaderPrompts.ts` (`initialSceneStateSystemPrompt()`,
+`initialSceneStateUserPrompt(...)`) and are used only by the `SessionLoader` to build the
+starting scene state. Keep them out of `prompts.ts`.
+
 Rules:
-- Never inline a prompt string inside a logic file — add/extend it here.
+- Never inline a prompt string inside a logic file — add/extend it in `prompts.ts`
+  (in-game) or `loaderPrompts.ts` (load-time).
 - Separator tokens (`#ACTIONS#`, `#OUTCOME#`) are a contract shared with the parsing code in
   `NpcProcessor`/`SceneProcessor`. Change both sides together.
 - Prompt language is English; player-visible output language is controlled by

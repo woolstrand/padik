@@ -1,7 +1,7 @@
 // Wire-format and API response types: single source of truth is engine/src/types.ts.
 // This file re-exports only the types that cross the HTTP/SSE boundary so that
 // UI code continues to import from './types' (or '../types') without change.
-// Internal engine types (ILlmClient, PipelineStep, NpcConfig, NpcState, GameState, …)
+// Internal engine types (ILlmClient, PipelineStep, NpcConfig, NpcInnerState, GameState, …)
 // are intentionally NOT re-exported here.
 export type {
   PlayerActionType,
@@ -10,7 +10,7 @@ export type {
   TurnResult,
   NpcDebugStep,
   NpcDebugData,
-  WorldConfig,
+  WorldRuntime,
   StoryHistoryEntry,
   StoryInfo,
   StepStartEvent,

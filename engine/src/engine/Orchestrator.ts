@@ -3,6 +3,7 @@ import { NpcProcessor } from './NpcProcessor';
 import { Narrator } from './Narrator';
 import { SceneProcessor } from './SceneProcessor';
 import { SceneStateManager } from './SceneManager';
+import { NpcStateManager } from './NpcStateManager';
 import { ObservationProcessor } from './ObservationProcessor';
 import { NpcStep } from './steps/NpcStep';
 import { NarrateStep } from './steps/NarrateStep';
@@ -10,18 +11,17 @@ import { SceneProcessorStep } from './steps/SceneProcessorStep';
 import { SceneUpdateStep } from './steps/SceneUpdateStep';
 import { ObserveStep } from './steps/ObserveStep';
 import {
+  EngineInitialState,
   GameState,
   ILlmClient,
-  NpcConfig,
   NpcDebugData,
+  NpcInnerState,
   NpcOutput,
-  NpcState,
   PlayerAction,
   StoryHistoryEntry,
   TurnDoneEvent,
   TurnResult,
   TurnStreamEvent,
-  WorldConfig,
 } from '../types';
 
 /**
@@ -78,6 +78,10 @@ export class Orchestrator {
   private readonly gameState: GameState;
   private readonly debugHelper = new NpcDebugHelper();
   private readonly sceneManager: SceneStateManager;
+  private readonly npcStateManager: NpcStateManager;
+
+  /** Opening narrative — first message shown to the player and the NPCs' first-turn context. */
+  private readonly opening: string;
 
   // Step objects — created once, reused across turns.
   private readonly npcSteps: Map<string, NpcStep>;
@@ -92,7 +96,7 @@ export class Orchestrator {
     sceneProcessorHistory: string[];
     sceneProcessorReasoningHistory: string[];
     storyHistory: StoryHistoryEntry[];
-    npcStates: Map<string, NpcState>;
+    npcStates: Map<string, NpcInnerState>;
     turnCount: number;
     sceneState: string;
   } | null = null;
@@ -102,33 +106,27 @@ export class Orchestrator {
     narrator: Narrator,
     sceneProcessor: SceneProcessor,
     observationProcessor: ObservationProcessor,
-    npcConfigs: NpcConfig[],
-    worldConfig: WorldConfig,
+    initialState: EngineInitialState,
     llmClient: ILlmClient,
   ) {
-    const npcStates = new Map<string, NpcState>();
-    for (const npc of npcConfigs) {
-      npcStates.set(npc.id, {
-        npc,
-        thoughts: npc.initialState,
-        lastActions: [],
-      });
-    }
-
     this.gameState = {
       narrativeHistory: [],
       sceneProcessorHistory: [],
       sceneProcessorReasoningHistory: [],
       storyHistory: [],
-      npcStates,
-      worldConfig,
+      world: initialState.world,
       turnCount: 0,
     };
 
-    this.sceneManager = new SceneStateManager(llmClient, worldConfig, npcConfigs);
+    this.opening = initialState.opening;
+    this.npcStateManager = new NpcStateManager(initialState.npcInnerStates);
+    this.sceneManager = new SceneStateManager(llmClient, initialState.initialSceneState);
 
     this.npcSteps = new Map(
-      npcConfigs.map((npc) => [npc.id, new NpcStep(npcProcessor, npc.name)]),
+      initialState.npcInnerStates.map((npc) => [
+        npc.persona.id,
+        new NpcStep(npcProcessor, npc.persona.name),
+      ]),
     );
     this.sceneProcessorStep = new SceneProcessorStep(sceneProcessor);
     this.narrateStep = new NarrateStep(narrator);
@@ -143,9 +141,7 @@ export class Orchestrator {
       sceneProcessorHistory: [...this.gameState.sceneProcessorHistory],
       sceneProcessorReasoningHistory: [...this.gameState.sceneProcessorReasoningHistory],
       storyHistory: [...this.gameState.storyHistory],
-      npcStates: new Map(
-        Array.from(this.gameState.npcStates.entries()).map(([k, v]) => [k, { ...v }]),
-      ),
+      npcStates: this.npcStateManager.snapshot(),
       turnCount: this.gameState.turnCount,
       sceneState: this.sceneManager.getCurrentState(),
     };
@@ -157,9 +153,7 @@ export class Orchestrator {
     this.gameState.sceneProcessorHistory = [...this.checkpoint.sceneProcessorHistory];
     this.gameState.sceneProcessorReasoningHistory = [...this.checkpoint.sceneProcessorReasoningHistory];
     this.gameState.storyHistory = [...this.checkpoint.storyHistory];
-    this.gameState.npcStates = new Map(
-      Array.from(this.checkpoint.npcStates.entries()).map(([k, v]) => [k, { ...v }]),
-    );
+    this.npcStateManager.restore(this.checkpoint.npcStates);
     this.gameState.turnCount = this.checkpoint.turnCount;
     this.debugHelper.rollbackToTurn(this.checkpoint.turnCount);
     this.sceneManager.restoreState(this.checkpoint.sceneState);
@@ -189,19 +183,18 @@ export class Orchestrator {
     // ── NPC steps (sequential so each sees prior NPCs' actions this turn) ───
     // NPCs receive the SceneProcessor outcome from the previous turn as their
     // "recent events" context — more factual and useful than narrator prose.
-    for (const npcId of this.gameState.npcStates.keys()) {
+    for (const npcId of this.npcStateManager.ids()) {
       const npcStep = this.npcSteps.get(npcId)!;
       steps.push({
         displayName: npcStep.displayName,
         execute: async () => {
-          const state = this.gameState.npcStates.get(npcId)!;
+          const innerState = this.npcStateManager.get(npcId);
           const otherNpcActions = ctx.npcOutputs.map(
             (o) => `${o.npcName}: ${o.actions.join(', ')}`,
           );
           const output = await npcStep.execute({
-            npcConfig: state.npc,
-            npcState: state,
-            worldConfig: this.gameState.worldConfig,
+            innerState,
+            world: this.gameState.world,
             recentNarrative: ctx.lastSceneProcessorOutcome,
             playerAction: ctx.playerAction,
             otherNpcActions,
@@ -217,11 +210,7 @@ export class Orchestrator {
             output.thoughts,
             output.actions,
           );
-          this.gameState.npcStates.set(npcId, {
-            ...state,
-            thoughts: output.thoughts,
-            lastActions: output.actions,
-          });
+          this.npcStateManager.updateMind(npcId, output.thoughts, output.actions);
         },
       });
     }
@@ -234,7 +223,7 @@ export class Orchestrator {
       displayName: sceneProcessorStep.displayName,
       execute: async () => {
         const result = await sceneProcessorStep.execute({
-          worldConfig: this.gameState.worldConfig,
+          worldConfig: this.gameState.world,
           sceneState: ctx.sceneState,
           playerAction: ctx.playerAction,
           npcOutputs: ctx.npcOutputs,
@@ -248,7 +237,7 @@ export class Orchestrator {
     // Converts the SceneProcessor factual outcome into artistic prose.
     // ctx.sceneProcessorOutcome is set by the step above before this runs.
     const narrateStep = this.narrateStep;
-    const worldConfig = this.gameState.worldConfig;
+    const worldConfig = this.gameState.world;
     const narrativeHistory = this.gameState.narrativeHistory;
     steps.push({
       displayName: narrateStep.displayName,
@@ -307,7 +296,7 @@ export class Orchestrator {
       displayName: observeStep.displayName,
       execute: async () => {
         ctx.sceneProcessorOutcome = await observeStep.execute({
-          worldConfig: this.gameState.worldConfig,
+          worldConfig: this.gameState.world,
           sceneState: ctx.sceneState,
           focusText: ctx.playerAction!.text,
         });
@@ -317,7 +306,7 @@ export class Orchestrator {
     // ── Narrator step ────────────────────────────────────────────────────────
     // ctx.sceneProcessorOutcome holds the observation result set by ObserveStep.
     const narrateStep = this.narrateStep;
-    const worldConfig = this.gameState.worldConfig;
+    const worldConfig = this.gameState.world;
     const narrativeHistory = this.gameState.narrativeHistory;
     steps.push({
       displayName: narrateStep.displayName,
@@ -364,7 +353,7 @@ export class Orchestrator {
     return {
       sceneState: this.sceneManager.getCurrentState(),
       lastSceneProcessorOutcome:
-        this.gameState.sceneProcessorHistory.at(-1) ?? this.gameState.worldConfig.initialScene,
+        this.gameState.sceneProcessorHistory.at(-1) ?? this.opening,
       playerAction: playerAction.type === 'skip' ? null : playerAction,
       npcOutputs: [],
       sceneProcessorOutcome: '',
@@ -387,7 +376,6 @@ export class Orchestrator {
 
   async processTurn(playerAction: PlayerAction): Promise<TurnResult> {
     this.saveCheckpoint(playerAction);
-    await this.sceneManager.ensureInitialized();
 
     const ctx = this.createTurnContext(playerAction);
     const pipeline = this.buildPipeline(ctx);
@@ -409,7 +397,6 @@ export class Orchestrator {
    */
   async *processTurnStream(playerAction: PlayerAction): AsyncGenerator<TurnStreamEvent> {
     this.saveCheckpoint(playerAction);
-    await this.sceneManager.ensureInitialized();
 
     const ctx = this.createTurnContext(playerAction);
     const pipeline = this.buildPipeline(ctx);
@@ -464,6 +451,11 @@ export class Orchestrator {
 
   getSceneState(): string {
     return this.sceneManager.getCurrentState();
+  }
+
+  /** Opening narrative shown to the player as the first message. */
+  getOpening(): string {
+    return this.opening;
   }
 
   getDebugData(): NpcDebugData[] {

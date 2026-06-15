@@ -1,8 +1,8 @@
-import { NpcOutput, PipelineStep, PlayerAction, WorldConfig } from '../../types';
+import { NpcOutput, PipelineStep, PlayerAction, WorldRuntime } from '../../types';
 import { SceneProcessor, SceneProcessorResult } from '../SceneProcessor';
 
 export interface SceneProcessorStepInput {
-  worldConfig: WorldConfig;
+  worldConfig: WorldRuntime;
   sceneState: string;
   playerAction: PlayerAction | null;
   npcOutputs: NpcOutput[];

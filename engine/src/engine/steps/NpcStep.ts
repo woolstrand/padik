@@ -1,10 +1,9 @@
-import { NpcConfig, NpcOutput, NpcState, PipelineStep, PlayerAction, WorldConfig } from '../../types';
+import { NpcInnerState, NpcOutput, PipelineStep, PlayerAction, WorldRuntime } from '../../types';
 import { NpcProcessor } from '../NpcProcessor';
 
 export interface NpcStepInput {
-  npcConfig: NpcConfig;
-  npcState: NpcState;
-  worldConfig: WorldConfig;
+  innerState: NpcInnerState;
+  world: WorldRuntime;
   recentNarrative: string;
   playerAction: PlayerAction | null;
   otherNpcActions: string[];
@@ -25,9 +24,8 @@ export class NpcStep implements PipelineStep<NpcStepInput, NpcOutput> {
 
   execute(input: NpcStepInput): Promise<NpcOutput> {
     return this.processor.process(
-      input.npcConfig,
-      input.npcState,
-      input.worldConfig,
+      input.innerState,
+      input.world,
       input.recentNarrative,
       input.playerAction,
       input.otherNpcActions,

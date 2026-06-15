@@ -3,7 +3,7 @@ import { NpcDebugData, NpcDebugStep, PlayerAction } from '../types';
 /**
  * NpcDebugHelper — collects and stores per-NPC debug data for each turn.
  *
- * Kept separate from NpcProcessor and NpcState so neither the NPC class
+ * Kept separate from NpcProcessor and the NPC state so neither the NPC class
  * hierarchy nor the game state is polluted with debug concerns.
  */
 export class NpcDebugHelper {

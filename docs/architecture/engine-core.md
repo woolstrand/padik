@@ -11,6 +11,11 @@ once per turn, builds and runs an ordered pipeline of isolated steps, routing ea
 typed output back into game state. It exposes blocking and streaming turn variants plus
 retry/cancel.
 
+It is constructed from an `EngineInitialState` (produced by the `SessionLoader`, see
+[simulation.md](simulation.md)) rather than from raw story config: it builds a
+`SceneStateManager` (from the ready initial scene state) and an `NpcStateManager` (from the
+NPC inner states), and keeps the `WorldRuntime` plus the opening narrative.
+
 It does **not** talk to the LLM directly and does **not** contain any prompt text — it only
 wires steps together.
 
@@ -19,12 +24,13 @@ wires steps together.
 | File | Role |
 |------|------|
 | `engine/src/engine/Orchestrator.ts` | State owner, pipeline builder, turn loop, checkpoints |
+| `engine/src/engine/NpcStateManager.ts` | Owns NPC inner state (persona + mind); turn order |
 | `engine/src/engine/steps/NpcStep.ts` | One bound NPC per instance → `NpcOutput` |
 | `engine/src/engine/steps/SceneProcessorStep.ts` | Player + NPC actions → factual outcome |
 | `engine/src/engine/steps/NarrateStep.ts` | Factual outcome → prose (supports streaming) |
 | `engine/src/engine/steps/SceneUpdateStep.ts` | Outcome + prose → new scene state |
 | `engine/src/engine/steps/ObserveStep.ts` | Observe action → factual sensory description |
-| `engine/src/types.ts` | `PipelineStep`, `GameState`, `NpcState`, `TurnStreamEvent`, etc. |
+| `engine/src/types.ts` | `PipelineStep`, `GameState`, `NpcInnerState`, `EngineInitialState`, `TurnStreamEvent`, etc. |
 
 ## Pipeline (rebuilt every turn)
 
@@ -43,7 +49,8 @@ observation as "recent events" on the next turn. The observation outcome plays t
 `sceneProcessorOutcome` for the Narrator and SceneManager.
 
 - NPC steps run **sequentially** so each NPC sees the actions of NPCs already processed this
-  turn (`otherNpcActions`).
+  turn (`otherNpcActions`). NPC inner state (thoughts) is read from / written back to
+  `NpcStateManager`, iterated in its `ids()` order.
 - NPCs receive the **previous turn's SceneProcessor outcome** as "recent events" context
   (more factual than narrator prose), plus the current factual scene state.
 - `SceneUpdateStep` must run **last**; it merges the factual outcome (primary) and the
@@ -56,7 +63,7 @@ Each step implements `PipelineStep<TInput, TOutput>` (`displayName` + `execute`)
 captured by closure, so the turn loop is a plain iteration with no per-step branching.
 
 Cross-step values that are produced and consumed within a turn (e.g. the SceneProcessor
-outcome feeding the Narrator) are passed via small mutable boxes (`{ value: string }`) and a
+outcome feeding the Narrator) are passed via a mutable per-turn `TurnContext` object plus a
 live `npcOutputs` array. A `BoundStep` may add an optional `executeStream()` (used only by
 `NarrateStep`) — when present, the streaming turn loop forwards its tokens as
 `narrator:token` events.
@@ -67,11 +74,11 @@ live `npcOutputs` array. A `BoundStep` may add an optional `executeStream()` (us
 
 ## Turn lifecycle
 
-1. `saveCheckpoint(action)` snapshots narrative/scene-processor histories, a shallow copy of
-   `npcStates`, `turnCount`, and the current scene state.
-2. `sceneManager.ensureInitialized()` awaits the async first-turn scene init.
-3. `buildPipeline(...)` → iterate steps (`execute` or `executeStream`).
-4. Commit: push narrative + scene-processor outcome/reasoning, increment `turnCount`.
+1. `saveCheckpoint(action)` snapshots narrative/scene-processor histories, the
+   `NpcStateManager` inner states (`snapshot()`), `turnCount`, and the current scene state.
+2. `buildPipeline(...)` → iterate steps (`execute` or `executeStream`). The scene state is
+   already initialized by the `SessionLoader`, so no async init step is needed.
+3. Commit: push narrative + scene-processor outcome/reasoning, increment `turnCount`.
 
 `processTurn` returns `TurnResult`; `processTurnStream` yields `step:start` / `step:done` /
 `narrator:token` / `done` (and `error`) events. The two paths share `buildPipeline` but
@@ -82,14 +89,15 @@ duplicate the loop/commit logic — keep them consistent when editing.
 - `retryLastTurnStream()` restores the checkpoint and re-runs the last action with fresh LLM
   calls.
 - `cancelTurn()` restores the checkpoint (used when the UI aborts a turn).
-- `restoreCheckpoint()` also rolls back `NpcDebugHelper` (`rollbackToTurn`) and the
-  `SceneStateManager` state.
+- `restoreCheckpoint()` also rolls back `NpcDebugHelper` (`rollbackToTurn`), the
+  `NpcStateManager` (`restore`), and the `SceneStateManager` state.
 
 Only one checkpoint (the most recent turn) is retained — retry/cancel are single-level.
 
 ## Gotchas
 
-- Checkpoint copies of `npcStates` are **shallow** (`{ ...v }`); `lastActions`/`thoughts` are
-  replaced rather than mutated in place, so this is currently safe — preserve that invariant.
+- `NpcStateManager` snapshots copy each NPC's mutable `mind` (thoughts + a fresh
+  `lastActions` array) while sharing the immutable `persona` — keep the mind replaced rather
+  than mutated in place so snapshots stay independent.
 - The Narrator input uses a getter for `sceneProcessorOutcome` so it reads the value set by
   the prior step at execution time, not at build time.

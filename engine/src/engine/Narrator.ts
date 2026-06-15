@@ -1,4 +1,4 @@
-import { ILlmClient, WorldConfig } from '../types';
+import { ILlmClient, WorldRuntime } from '../types';
 import { NarratorMode, narratorSystemPrompt, narratorUserPrompt } from '../prompts';
 
 /**
@@ -12,7 +12,7 @@ export class Narrator {
   constructor(private readonly llmClient: ILlmClient) {}
 
   async narrate(
-    worldConfig: WorldConfig,
+    worldConfig: WorldRuntime,
     narrativeHistory: string[],
     sceneState: string,
     sceneProcessorOutcome: string,
@@ -30,7 +30,7 @@ export class Narrator {
   }
 
   async *narrateStream(
-    worldConfig: WorldConfig,
+    worldConfig: WorldRuntime,
     narrativeHistory: string[],
     sceneState: string,
     sceneProcessorOutcome: string,

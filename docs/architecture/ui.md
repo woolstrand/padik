@@ -22,8 +22,10 @@ and exposes a debug panel. It is a thin view over the engine API — it holds no
 
 ## Data flow
 
-`App` loads stories + initial state on mount. A turn calls `sendActionStream` (or
-`retryActionStream`), an async generator yielding `TurnStreamEvent`s:
+`App` loads stories + initial state on mount. The first narrative entry is the snapshot's
+`opening` field (or the persisted `narrativeHistory` if a turn has already happened). A turn
+calls `sendActionStream` (or `retryActionStream`), an async generator yielding
+`TurnStreamEvent`s:
 
 - `step:start` / `step:done` → set/clear the progress label.
 - `narrator:token` → append to the streaming entry (live prose with a cursor).

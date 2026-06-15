@@ -32,7 +32,7 @@ SceneManager update                       → new factual scene state for next t
 
 The `Orchestrator` builds this pipeline fresh each turn and routes typed inputs/outputs
 between isolated steps. Prompts are rebuilt from scratch every turn (only NPC *thoughts* and
-the factual scene state persist) to keep LLM token usage low.
+the factual scene state persist) to keep LLM token usage low and context manageable.
 
 ## Core conventions
 
@@ -55,7 +55,7 @@ you alter that subsystem's behavior, contracts, or structure.
 |------|-----------------|-----|
 | Turn pipeline, Orchestrator, steps, checkpoints/retry | `engine/src/engine/Orchestrator.ts`, `engine/src/engine/steps/**` | [docs/architecture/engine-core.md](../docs/architecture/engine-core.md) |
 | LLM client, prompts, model config, streaming | `engine/src/llm/**`, `prompts.ts`, `constants.ts` | [docs/architecture/llm-layer.md](../docs/architecture/llm-layer.md) |
-| NPC / Narrator / SceneProcessor / SceneManager | `engine/src/engine/NpcProcessor.ts`, `Narrator.ts`, `SceneProcessor.ts`, `SceneManager.ts` | [docs/architecture/simulation.md](../docs/architecture/simulation.md) |
+| NPC / Narrator / SceneProcessor / SceneManager / NpcStateManager / SessionLoader | `engine/src/engine/NpcProcessor.ts`, `Narrator.ts`, `SceneProcessor.ts`, `SceneManager.ts`, `NpcStateManager.ts`, `SessionLoader.ts` | [docs/architecture/simulation.md](../docs/architecture/simulation.md) |
 | HTTP server, endpoints, story loading | `engine/src/index.ts` | [docs/architecture/server-api.md](../docs/architecture/server-api.md) |
 | React UI, components, SSE consumption | `ui/src/**` | [docs/architecture/ui.md](../docs/architecture/ui.md) |
 | Debug panel & debug data capture | `engine/src/engine/NpcDebugHelper.ts`, `ui/src/components/DebugPanel.tsx` | [docs/architecture/debug.md](../docs/architecture/debug.md) |

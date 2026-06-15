@@ -7,6 +7,7 @@ import { NpcProcessor } from './engine/NpcProcessor';
 import { Narrator } from './engine/Narrator';
 import { SceneProcessor } from './engine/SceneProcessor';
 import { ObservationProcessor } from './engine/ObservationProcessor';
+import { SessionLoader } from './engine/SessionLoader';
 import { Orchestrator } from './engine/Orchestrator';
 import {
   DEFAULT_STORY_ID,
@@ -108,7 +109,7 @@ function writeSelectedStoryId(storyId: string): void {
   fs.writeFileSync(selectedStoryPath, JSON.stringify({ storyId }, null, 2));
 }
 
-function buildOrchestrator(storyId: string): Orchestrator {
+async function buildOrchestrator(storyId: string): Promise<Orchestrator> {
   const llmClient = new LlmClient({
     baseURL: LLM_BASE_URL,
     model: LLM_MODEL,
@@ -127,15 +128,30 @@ function buildOrchestrator(storyId: string): Orchestrator {
     loadJson<NpcConfig>(path.join(storyFolder, filename)),
   );
 
-  return new Orchestrator(npcProcessor, narrator, sceneProcessor, observationProcessor, npcConfigs, worldConfig, llmClient);
+  // The loader turns raw story config into the engine's initial runtime state;
+  // engine components never see the config shapes after this point.
+  const loader = new SessionLoader(llmClient);
+  const initialState = await loader.load(worldConfig, npcConfigs);
+
+  return new Orchestrator(npcProcessor, narrator, sceneProcessor, observationProcessor, initialState, llmClient);
+}
+
+function buildSnapshot(): GameStateSnapshot {
+  const state = orchestrator.getGameState();
+  return {
+    narrativeHistory: state.narrativeHistory,
+    turnCount: state.turnCount,
+    world: state.world,
+    opening: orchestrator.getOpening(),
+    storyId: currentStoryId,
+    sceneState: orchestrator.getSceneState(),
+    storyHistory: state.storyHistory,
+  };
 }
 
 // Composition root: wire up all dependencies here
-fs.mkdirSync(storiesRoot, { recursive: true });
-const initialStories = listStories();
-let currentStoryId = readSelectedStoryId(initialStories);
-writeSelectedStoryId(currentStoryId);
-let orchestrator = buildOrchestrator(currentStoryId);
+let currentStoryId: string;
+let orchestrator: Orchestrator;
 
 const app = express();
 app.use(cors());
@@ -250,16 +266,7 @@ app.post('/api/turn/cancel', (_req: Request, res: Response) => {
 });
 
 app.get('/api/state', (_req: Request, res: Response) => {
-  const state = orchestrator.getGameState();
-  const snapshot: GameStateSnapshot = {
-    narrativeHistory: state.narrativeHistory,
-    turnCount: state.turnCount,
-    worldConfig: state.worldConfig,
-    storyId: currentStoryId,
-    sceneState: orchestrator.getSceneState(),
-    storyHistory: state.storyHistory,
-  };
-  res.json(snapshot);
+  res.json(buildSnapshot());
 });
 
 app.get('/api/stories', (_req: Request, res: Response) => {
@@ -268,7 +275,7 @@ app.get('/api/stories', (_req: Request, res: Response) => {
   res.json(response);
 });
 
-app.post('/api/session/start', (req: Request, res: Response) => {
+app.post('/api/session/start', async (req: Request, res: Response) => {
   const storyId = req.body?.storyId;
 
   if (typeof storyId !== 'string' || !isValidStoryId(storyId)) {
@@ -283,19 +290,10 @@ app.post('/api/session/start', (req: Request, res: Response) => {
   }
 
   try {
-    orchestrator = buildOrchestrator(storyId);
+    orchestrator = await buildOrchestrator(storyId);
     currentStoryId = storyId;
     writeSelectedStoryId(storyId);
-    const state = orchestrator.getGameState();
-    const snapshot: GameStateSnapshot = {
-      narrativeHistory: state.narrativeHistory,
-      turnCount: state.turnCount,
-      worldConfig: state.worldConfig,
-      storyId: currentStoryId,
-      sceneState: orchestrator.getSceneState(),
-      storyHistory: state.storyHistory,
-    };
-    res.json(snapshot);
+    res.json(buildSnapshot());
   } catch (err) {
     console.error('Error starting session:', err);
     res.status(500).json({ error: 'Failed to start a new session.' });
@@ -311,8 +309,21 @@ app.get('/api/debug', (_req: Request, res: Response) => {
   res.json(orchestrator.getDebugData());
 });
 
-app.listen(SERVER_PORT, '0.0.0.0', () => {
-  console.log(`Padik game engine running on http://0.0.0.0:${SERVER_PORT}`);
-  console.log(`LLM endpoint: ${LLM_BASE_URL}`);
-  console.log(`Selected story: ${currentStoryId}`);
+async function bootstrap(): Promise<void> {
+  fs.mkdirSync(storiesRoot, { recursive: true });
+  const initialStories = listStories();
+  currentStoryId = readSelectedStoryId(initialStories);
+  writeSelectedStoryId(currentStoryId);
+  orchestrator = await buildOrchestrator(currentStoryId);
+
+  app.listen(SERVER_PORT, '0.0.0.0', () => {
+    console.log(`Padik game engine running on http://0.0.0.0:${SERVER_PORT}`);
+    console.log(`LLM endpoint: ${LLM_BASE_URL}`);
+    console.log(`Selected story: ${currentStoryId}`);
+  });
+}
+
+bootstrap().catch((err) => {
+  console.error('Failed to start the game engine:', err);
+  process.exit(1);
 });

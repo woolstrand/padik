@@ -6,7 +6,7 @@
  *   2. This module is the single place to swap or translate all LLM-facing text.
  */
 
-import { NpcConfig, NpcOutput, NpcState, PlayerAction, WorldConfig } from './types';
+import { NpcInnerState, NpcOutput, PlayerAction, WorldRuntime } from './types';
 import { MAX_NARRATIVE_HISTORY_IN_PROMPT, NARRATOR_LANGUAGE, NPC_ACTIONS_SEPARATOR, SCENE_OUTCOME_SEPARATOR } from './constants';
 
 // ---------------------------------------------------------------------------
@@ -35,7 +35,7 @@ ${reasoningInstruction}${reasoning ? '' : '\n\nOutput the factual outcome descri
 }
 
 export function sceneProcessorUserPrompt(
-  world: WorldConfig,
+  world: WorldRuntime,
   sceneState: string,
   playerAction: PlayerAction | null,
   npcOutputs: NpcOutput[],
@@ -110,7 +110,7 @@ Rules:
 }
 
 export function narratorUserPrompt(
-  world: WorldConfig,
+  world: WorldRuntime,
   history: string[],
   sceneState: string,
   sceneProcessorOutcome: string,
@@ -123,7 +123,7 @@ export function narratorUserPrompt(
 
   if (mode === 'observation') {
     return `# Style
-${world.atmosphere}
+${world.style}
 
 # Current scene state
 ${sceneState}
@@ -135,7 +135,7 @@ Summarize factual information of what the player perveives into an immersive art
   }
 
   return `# Style
-${world.atmosphere}
+${world.style}
 
 ${historySnippet}# Current scene state
 ${sceneState}
@@ -161,14 +161,14 @@ First write a detailed inner monologue. Then on a new line write the token ${NPC
 }
 
 export function npcUserPrompt(
-  npc: NpcConfig,
-  state: NpcState,
-  world: WorldConfig,
+  inner: NpcInnerState,
+  world: WorldRuntime,
   recentNarrative: string,
   playerAction: PlayerAction | null,
   otherNpcActions: string[],
   sceneState: string,
 ): string {
+  const { persona, mind } = inner;
   const playerText = playerAction
     ? playerAction.type === 'say'
       ? `Player said: "${playerAction.text}"`
@@ -181,22 +181,22 @@ export function npcUserPrompt(
       : '';
 
   return `# Style
-${world.atmosphere}
+${world.style}
 
 # Current scene
 ${recentNarrative}
 
-# Scene state (use only what your character ${npc.name} can directly perceive with their senses)
+# Scene state (use only what your character ${persona.name} can directly perceive with their senses)
 ${sceneState}
 
-# Your character: ${npc.name}
-${npc.description}
+# Your character: ${persona.name}
+${persona.character}
 
-Traits: ${npc.traits.join(', ')}.
-Goals: ${npc.goals.join('; ')}.
+Traits: ${persona.traits.join(', ')}.
+Goals: ${persona.goals.join('; ')}.
 
 # Your previous thoughts
-${state.thoughts || npc.initialState}
+${mind.thoughts}
 
 # What is happening right now
 ${playerText}
@@ -225,25 +225,6 @@ export function sceneStateManagerSystemPrompt(): string {
 Maintain an accurate factual description: characters' positions and objects, their poses and conditions, lines of sight, inventory, important environmental details.
 Strictly factual — no intentions, assumptions, thoughts, or feelings.
 Be specific, precise, and concise. No stylistic embellishment.`;
-}
-
-export function sceneStateManagerInitPrompt(worldConfig: WorldConfig, npcConfigs: NpcConfig[]): string {
-  const npcDescriptions = npcConfigs
-    .map((npc) => `${npc.name}: ${npc.description}. ${npc.initialState}`)
-    .join('\n');
-
-  return `# World
-${worldConfig.setting}
-
-# Initial scene
-${worldConfig.initialScene}
-
-# Characters
-${npcDescriptions}
-
-Write a brief factual description of the initial scene state.
-Include each character's position, pose, and condition; important objects; and notable environmental details.
-Do not include goals, intentions, thoughts, or feelings.`.trim();
 }
 
 export function sceneStateManagerUpdatePrompt(
@@ -290,7 +271,7 @@ Rules:
 }
 
 export function observationUserPrompt(
-  world: WorldConfig,
+  world: WorldRuntime,
   sceneState: string,
   focusText: string,
 ): string {

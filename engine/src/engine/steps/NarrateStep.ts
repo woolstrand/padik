@@ -1,9 +1,9 @@
-import { PipelineStep, WorldConfig } from '../../types';
+import { PipelineStep, WorldRuntime } from '../../types';
 import { NarratorMode } from '../../prompts';
 import { Narrator } from '../Narrator';
 
 export interface NarrateStepInput {
-  worldConfig: WorldConfig;
+  worldConfig: WorldRuntime;
   narrativeHistory: string[];
   sceneState: string;
   sceneProcessorOutcome: string;

@@ -56,27 +56,85 @@ export type TurnStreamEvent =
   | TurnDoneEvent
   | TurnErrorEvent;
 
-export interface NpcConfig {
-  id: string;
-  name: string;
-  description: string;
-  traits: string[];
-  goals: string[];
-  initialState: string;
-}
+// ---------------------------------------------------------------------------
+// Story configuration — raw shapes parsed from the userdata JSON files.
+// Consumed ONLY by the SessionLoader; runtime engine code never sees these.
+// ---------------------------------------------------------------------------
 
+/** Raw `world.json` shape. */
 export interface WorldConfig {
+  /** Factual description of the place (world facts). */
   setting: string;
-  atmosphere: string;
-  initialScene: string;
+  /** Narration style / mood guidance. */
+  style: string;
+  /** Opening narrative prose shown to the player as the first message. */
+  opening: string;
+  /** Who the player is in this scene. */
   playerDescription: string;
 }
 
-export interface NpcState {
-  npc: NpcConfig;
+/** Raw `npc_*.json` shape. */
+export interface NpcConfig {
+  id: string;
+  name: string;
+  /** Physical appearance — seeds the factual scene state (SceneManager). */
+  appearance: string;
+  /** Character / personality description — seeds the NPC inner state. */
+  character: string;
+  traits: string[];
+  goals: string[];
+  /** Initial inner monologue / mental state seed. */
+  initialMindset: string;
+}
+
+// ---------------------------------------------------------------------------
+// Engine runtime state — produced by the SessionLoader from the config above.
+// Engine components depend only on these types, never on the raw config.
+// ---------------------------------------------------------------------------
+
+/** Static world data baked for the engine. Immutable during play. */
+export interface WorldRuntime {
+  /** Factual world facts (SceneProcessor, ObservationProcessor, scene init). */
+  setting: string;
+  /** Narration style / mood (Narrator, NPC prompts). */
+  style: string;
+  /** Who the player is. */
+  playerDescription: string;
+}
+
+/** Immutable identity & personality of an NPC. Never changes during play. */
+export interface NpcPersona {
+  id: string;
+  name: string;
+  /** Character / personality description (no physical appearance). */
+  character: string;
+  traits: string[];
+  goals: string[];
+}
+
+/** Mutable mental state of an NPC. Evolves every turn. */
+export interface NpcMind {
   /** Internal monologue kept between turns; injected into the next prompt. */
   thoughts: string;
+  /** Actions taken on the most recent turn. */
   lastActions: string[];
+}
+
+/** Full inner state of an NPC: immutable persona + mutable mind. */
+export interface NpcInnerState {
+  readonly persona: NpcPersona;
+  mind: NpcMind;
+}
+
+/** Complete initial engine state produced by the SessionLoader. */
+export interface EngineInitialState {
+  world: WorldRuntime;
+  /** NPC inner states in turn order. */
+  npcInnerStates: NpcInnerState[];
+  /** Factual scene state at the start of play (positions, poses, appearance, objects). */
+  initialSceneState: string;
+  /** Opening narrative prose shown to the player as the first message. */
+  opening: string;
 }
 
 export interface StoryHistoryEntry {
@@ -95,8 +153,7 @@ export interface GameState {
   sceneProcessorHistory: string[];
   sceneProcessorReasoningHistory: string[];
   storyHistory: StoryHistoryEntry[];
-  npcStates: Map<string, NpcState>;
-  worldConfig: WorldConfig;
+  world: WorldRuntime;
   turnCount: number;
 }
 
@@ -145,7 +202,9 @@ export interface NpcDebugData {
 export interface GameStateSnapshot {
   narrativeHistory: string[];
   turnCount: number;
-  worldConfig: WorldConfig;
+  world: WorldRuntime;
+  /** Opening narrative shown to the player as the first message. */
+  opening: string;
   storyId: string;
   sceneState: string;
   storyHistory: StoryHistoryEntry[];

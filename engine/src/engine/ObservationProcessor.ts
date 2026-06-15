@@ -1,4 +1,4 @@
-import { ILlmClient, WorldConfig } from '../types';
+import { ILlmClient, WorldRuntime } from '../types';
 import { observationSystemPrompt, observationUserPrompt } from '../prompts';
 
 /**
@@ -20,7 +20,7 @@ export class ObservationProcessor {
   constructor(private readonly llmClient: ILlmClient) {}
 
   async process(
-    worldConfig: WorldConfig,
+    worldConfig: WorldRuntime,
     sceneState: string,
     focusText: string,
   ): Promise<string> {

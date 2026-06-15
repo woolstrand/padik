@@ -39,7 +39,7 @@ export function App() {
         const entries: ChatEntry[] =
           state.narrativeHistory.length > 0
             ? state.narrativeHistory.map((text) => ({ type: 'narrative' as const, text }))
-            : [{ type: 'narrative' as const, text: state.worldConfig.initialScene }];
+            : [{ type: 'narrative' as const, text: state.opening }];
         setChatEntries(entries);
         setSceneState(state.sceneState ?? '');
         setStoryHistory(state.storyHistory ?? []);
@@ -63,7 +63,7 @@ export function App() {
       const state = await startSession(pendingStoryId);
       setSelectedStoryId(state.storyId);
       setPendingStoryId(state.storyId);
-      setChatEntries([{ type: 'narrative', text: state.worldConfig.initialScene }]);
+      setChatEntries([{ type: 'narrative', text: state.opening }]);
       setDebugData([]);
       setHasLastTurn(false);
       setSceneState(state.sceneState ?? '');

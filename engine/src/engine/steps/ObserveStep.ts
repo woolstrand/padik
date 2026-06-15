@@ -1,8 +1,8 @@
-import { PipelineStep, WorldConfig } from '../../types';
+import { PipelineStep, WorldRuntime } from '../../types';
 import { ObservationProcessor } from '../ObservationProcessor';
 
 export interface ObserveStepInput {
-  worldConfig: WorldConfig;
+  worldConfig: WorldRuntime;
   sceneState: string;
   /** The player's description of where their attention is directed. */
   focusText: string;

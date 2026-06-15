@@ -13,11 +13,15 @@ UI.
 
 ## Composition root
 
-`buildOrchestrator(storyId)` constructs a fresh `LlmClient`, the three processors
-(`NpcProcessor`, `Narrator`, `SceneProcessor`), loads `world.json` + `npc_*.json` for the
-story, and returns a new `Orchestrator`. Starting a session rebuilds the orchestrator,
-discarding all prior game state. Constants come from `constants.ts`; never hardcode config
-here.
+`buildOrchestrator(storyId)` (async) constructs a fresh `LlmClient`, the four processors
+(`NpcProcessor`, `Narrator`, `SceneProcessor`, `ObservationProcessor`), loads `world.json` +
+`npc_*.json` for the story, runs the `SessionLoader` to turn that raw config into an
+`EngineInitialState`, and returns a new `Orchestrator`. Startup is wrapped in an async
+`bootstrap()` that selects the story, builds the orchestrator, then `app.listen`s. Starting a
+session rebuilds the orchestrator (awaiting the loader), discarding all prior game state.
+`buildSnapshot()` produces the `GameStateSnapshot` (`world`, `opening`, `sceneState`, …) for
+the `state` and `session/start` responses. Constants come from `constants.ts`; never hardcode
+config here.
 
 ## Story discovery & safety
 
