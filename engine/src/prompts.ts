@@ -83,13 +83,15 @@ export function narratorSystemPrompt(mode: NarratorMode): string {
 }
 
 function narratorObservationPrompt(): string {
-  return `You are a narrator for an interactive story, writing an observation of the user. Write in ${NARRATOR_LANGUAGE}.
+  return `You are a narrator for an interactive story, translating observations into immersive prose. Write in ${NARRATOR_LANGUAGE}.
+
+Weave the listed features and their properties into one cohesive paragraph, in natural perceptual order.
 
 Rules:
-- Describe what the protagonist perceives as in a snapshot of a single moment.
-- Do not invent new facts beyond what is given.
-- Do not attribute intentions, thoughts, or emotions to characters.
-- Use natural, immersive language. Add technical or anatomical precision only if it is expected naturally or if it is requested by the player, explicitly or implicitly.
+- Preserve all explicit feature names and properties — do not omit, generalize, or rephrase.
+- Do not invent facts beyond what is listed.
+- Do not attribute intentions, thoughts, or emotions.
+- Integrate technical terms naturally when already named in the observation.
 - Length: one paragraph.`;
 }
 
@@ -271,15 +273,20 @@ Do not include goals, intentions, thoughts, feelings, or emotions of any charact
 // ---------------------------------------------------------------------------
 
 export function observationSystemPrompt(): string {
-  return `You are a scene observation system for a text RPG.
-The player character is directing their attention at something specific.
-Provide a detailed, factual, sensory description of what they perceive, considering player's position and condition.
-Include physical details and any logically adjacent features that would be apparent under focused attention.
-Do not include surrounding details that are irrelevant to the player's focus.
-Invent new details that are not mentioned in the scene state, but would become apparent under close inspection of the focus area.
-Do not disclose scene details that are not perceivable from the player's position.
-Do not describe NPC intentions or thoughts. Do not trigger any new events or character actions.
-Be precise, concrete, and factual. No stylistic embellishment.`;
+  return `You are an observation generator for a text RPG.
+When the player focuses their attention on a target, generate a detailed sensory inventory of what they would perceive: named features and their concrete properties, including details that would be apparent under focused inspection.
+
+Output Format: Organize into logical hierarchies. Name each feature explicitly, then list its properties.
+
+Rules:
+- Invention is primary: generate plausible sensory details that would become apparent under close observation. Use the scene context only as a scaffold, not as the limit.
+- Name features explicitly before describing their properties. Identify the thing first, then its attributes.
+- Specify properties concretely: colors, materials, textures, sizes, conditions, composition. Avoid vague or impressionistic language.
+- Detail scope is proportional to observation focus: narrow focus → include micro-details; broad focus → list main categories only, skip minor details unless striking.
+- Only include features and items that are perceivable from the player's position. Do not list concealed, hidden, or out-of-sight items from the scene state.
+- Include only adjacent features logically connected to the focus.
+- Do not describe intentions, emotions, actions, or dialogue. Record only perceivable facts.
+- Be precise, concrete, unambiguous.`;
 }
 
 export function observationUserPrompt(
@@ -290,18 +297,19 @@ export function observationUserPrompt(
   return `# World
 ${world.setting}
 
-# Current scene state
+# Scene context (for reference, not as an extraction source)
 ${sceneState}
 
 # Player's focus
 ${focusText}
 
-Interpret text in "player's focus" section as an observaition instruction or observation target.
-Describe in detail what the player character perceives.
-Prefer concrete, specific details over generalities. Resolve any uncertainties with plausible assumptions.
-Include physical details and any logically adjacent features that would be apparent under focused attention.
-If players request includes or assumes actions, ignore those actions and optionally put an explanation in the output.
-Do not invent character actions or intentions. Stay strictly factual and observational.`.trim();
+Generate a detailed sensory observation of the focus target. Invent plausible details that would be apparent under close inspection. Only include features and items that are perceivable from the player's current position and line of sight (do not list hidden, concealed, or out-of-sight items).
+
+Organize into logical hierarchies: name each feature explicitly, then list its properties.
+
+Ignore any action assumptions in the request; focus only on the observational target.
+
+Output as a structured list: feature names with their properties.`.trim();
 }
 
 // ---------------------------------------------------------------------------
