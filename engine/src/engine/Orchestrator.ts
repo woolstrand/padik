@@ -40,6 +40,24 @@ interface BoundStep {
 }
 
 /**
+ * Mutable per-turn context shared across all pipeline steps.
+ *
+ * Steps read their inputs and write their outputs into this object.
+ * This replaces individual mutable boxes ({ value: string }) and the
+ * loosely-captured npcOutputs array, making the produce/consume
+ * relationships explicit and centralised.
+ */
+interface TurnContext {
+  readonly sceneState: string;
+  readonly lastSceneProcessorOutcome: string;
+  readonly playerAction: PlayerAction | null;
+  npcOutputs: NpcOutput[];
+  sceneProcessorOutcome: string;
+  sceneProcessorReasoning: string;
+  narrative: string;
+}
+
+/**
  * Orchestrator — the central data-flow coordinator.
  *
  * Responsibilities:
@@ -162,17 +180,9 @@ export class Orchestrator {
    * Each BoundStep captures its inputs via closure so the main execution loop
    * is a simple iteration with no per-step branching in the Orchestrator.
    */
-  private buildPipeline(
-    playerAction: PlayerAction | null,
-    sceneState: string,
-    lastSceneProcessorOutcome: string,
-    npcOutputs: NpcOutput[],
-    sceneProcessorOutcome: { value: string },
-    sceneProcessorReasoning: { value: string },
-    narrative: { value: string },
-  ): BoundStep[] {
-    if (playerAction?.type === 'observe') {
-      return this.buildObservationPipeline(playerAction, sceneState, sceneProcessorOutcome, narrative);
+  private buildPipeline(ctx: TurnContext): BoundStep[] {
+    if (ctx.playerAction?.type === 'observe') {
+      return this.buildObservationPipeline(ctx);
     }
     const steps: BoundStep[] = [];
 
@@ -185,25 +195,25 @@ export class Orchestrator {
         displayName: npcStep.displayName,
         execute: async () => {
           const state = this.gameState.npcStates.get(npcId)!;
-          const otherNpcActions = npcOutputs.map(
+          const otherNpcActions = ctx.npcOutputs.map(
             (o) => `${o.npcName}: ${o.actions.join(', ')}`,
           );
           const output = await npcStep.execute({
             npcConfig: state.npc,
             npcState: state,
             worldConfig: this.gameState.worldConfig,
-            recentNarrative: lastSceneProcessorOutcome,
-            playerAction,
+            recentNarrative: ctx.lastSceneProcessorOutcome,
+            playerAction: ctx.playerAction,
             otherNpcActions,
-            sceneState,
+            sceneState: ctx.sceneState,
           });
-          npcOutputs.push(output);
+          ctx.npcOutputs.push(output);
           this.debugHelper.record(
             npcId,
             output.npcName,
             this.gameState.turnCount,
-            lastSceneProcessorOutcome,
-            playerAction,
+            ctx.lastSceneProcessorOutcome,
+            ctx.playerAction,
             output.thoughts,
             output.actions,
           );
@@ -218,41 +228,48 @@ export class Orchestrator {
 
     // ── SceneProcessor step ──────────────────────────────────────────────────
     // Resolves what actually happened from player + NPC actions.
-    // npcOutputs is a live reference populated by the NPC steps above.
+    // ctx.npcOutputs is populated sequentially by the NPC steps above.
     const sceneProcessorStep = this.sceneProcessorStep;
     steps.push({
       displayName: sceneProcessorStep.displayName,
       execute: async () => {
         const result = await sceneProcessorStep.execute({
           worldConfig: this.gameState.worldConfig,
-          sceneState,
-          playerAction,
-          npcOutputs,
+          sceneState: ctx.sceneState,
+          playerAction: ctx.playerAction,
+          npcOutputs: ctx.npcOutputs,
         });
-        sceneProcessorOutcome.value = result.outcome;
-        sceneProcessorReasoning.value = result.reasoning ?? '';
+        ctx.sceneProcessorOutcome = result.outcome;
+        ctx.sceneProcessorReasoning = result.reasoning ?? '';
       },
     });
 
     // ── Narrator step ────────────────────────────────────────────────────────
     // Converts the SceneProcessor factual outcome into artistic prose.
-    // sceneProcessorOutcome.value is set by the step above.
+    // ctx.sceneProcessorOutcome is set by the step above before this runs.
     const narrateStep = this.narrateStep;
-    const narrateInput = {
-      worldConfig: this.gameState.worldConfig,
-      narrativeHistory: this.gameState.narrativeHistory,
-      sceneState,
-      mode: 'event' as const,
-      get sceneProcessorOutcome() { return sceneProcessorOutcome.value; },
-    };
+    const worldConfig = this.gameState.worldConfig;
+    const narrativeHistory = this.gameState.narrativeHistory;
     steps.push({
       displayName: narrateStep.displayName,
       execute: async () => {
-        narrative.value = await narrateStep.execute(narrateInput);
+        ctx.narrative = await narrateStep.execute({
+          worldConfig,
+          narrativeHistory,
+          sceneState: ctx.sceneState,
+          mode: 'event' as const,
+          sceneProcessorOutcome: ctx.sceneProcessorOutcome,
+        });
       },
       async *executeStream() {
-        for await (const token of narrateStep.narrateStream(narrateInput)) {
-          narrative.value += token;
+        for await (const token of narrateStep.narrateStream({
+          worldConfig,
+          narrativeHistory,
+          sceneState: ctx.sceneState,
+          mode: 'event' as const,
+          sceneProcessorOutcome: ctx.sceneProcessorOutcome,
+        })) {
+          ctx.narrative += token;
           yield token;
         }
       },
@@ -265,8 +282,8 @@ export class Orchestrator {
       displayName: sceneUpdateStep.displayName,
       execute: async () => {
         await sceneUpdateStep.execute({
-          sceneProcessorOutcome: sceneProcessorOutcome.value,
-          narratorOutcome: narrative.value,
+          sceneProcessorOutcome: ctx.sceneProcessorOutcome,
+          narratorOutcome: ctx.narrative,
         });
       },
     });
@@ -281,12 +298,7 @@ export class Orchestrator {
    * perceives) flows into both the Narrator and the SceneManager so that
    * newly revealed details are persisted in scene state.
    */
-  private buildObservationPipeline(
-    playerAction: PlayerAction,
-    sceneState: string,
-    observationOutcome: { value: string },
-    narrative: { value: string },
-  ): BoundStep[] {
+  private buildObservationPipeline(ctx: TurnContext): BoundStep[] {
     const steps: BoundStep[] = [];
 
     // ── ObserveStep ──────────────────────────────────────────────────────────
@@ -294,31 +306,39 @@ export class Orchestrator {
     steps.push({
       displayName: observeStep.displayName,
       execute: async () => {
-        observationOutcome.value = await observeStep.execute({
+        ctx.sceneProcessorOutcome = await observeStep.execute({
           worldConfig: this.gameState.worldConfig,
-          sceneState,
-          focusText: playerAction.text,
+          sceneState: ctx.sceneState,
+          focusText: ctx.playerAction!.text,
         });
       },
     });
 
     // ── Narrator step ────────────────────────────────────────────────────────
+    // ctx.sceneProcessorOutcome holds the observation result set by ObserveStep.
     const narrateStep = this.narrateStep;
-    const narrateInput = {
-      worldConfig: this.gameState.worldConfig,
-      narrativeHistory: this.gameState.narrativeHistory,
-      sceneState,
-      mode: 'observation' as const,
-      get sceneProcessorOutcome() { return observationOutcome.value; },
-    };
+    const worldConfig = this.gameState.worldConfig;
+    const narrativeHistory = this.gameState.narrativeHistory;
     steps.push({
       displayName: narrateStep.displayName,
       execute: async () => {
-        narrative.value = await narrateStep.execute(narrateInput);
+        ctx.narrative = await narrateStep.execute({
+          worldConfig,
+          narrativeHistory,
+          sceneState: ctx.sceneState,
+          mode: 'observation' as const,
+          sceneProcessorOutcome: ctx.sceneProcessorOutcome,
+        });
       },
       async *executeStream() {
-        for await (const token of narrateStep.narrateStream(narrateInput)) {
-          narrative.value += token;
+        for await (const token of narrateStep.narrateStream({
+          worldConfig,
+          narrativeHistory,
+          sceneState: ctx.sceneState,
+          mode: 'observation' as const,
+          sceneProcessorOutcome: ctx.sceneProcessorOutcome,
+        })) {
+          ctx.narrative += token;
           yield token;
         }
       },
@@ -331,8 +351,8 @@ export class Orchestrator {
       displayName: sceneUpdateStep.displayName,
       execute: async () => {
         await sceneUpdateStep.execute({
-          sceneProcessorOutcome: observationOutcome.value,
-          narratorOutcome: narrative.value,
+          sceneProcessorOutcome: ctx.sceneProcessorOutcome,
+          narratorOutcome: ctx.narrative,
         });
       },
     });
@@ -340,45 +360,44 @@ export class Orchestrator {
     return steps;
   }
 
+  private createTurnContext(playerAction: PlayerAction): TurnContext {
+    return {
+      sceneState: this.sceneManager.getCurrentState(),
+      lastSceneProcessorOutcome:
+        this.gameState.sceneProcessorHistory.at(-1) ?? this.gameState.worldConfig.initialScene,
+      playerAction: playerAction.type === 'skip' ? null : playerAction,
+      npcOutputs: [],
+      sceneProcessorOutcome: '',
+      sceneProcessorReasoning: '',
+      narrative: '',
+    };
+  }
+
+  private commitTurn(playerAction: PlayerAction, ctx: TurnContext): void {
+    this.gameState.narrativeHistory.push(ctx.narrative);
+    if (playerAction.type === 'observe') {
+      this.gameState.storyHistory.push({ kind: 'observation', turn: this.gameState.turnCount, text: ctx.sceneProcessorOutcome });
+    } else {
+      this.gameState.sceneProcessorHistory.push(ctx.sceneProcessorOutcome);
+      this.gameState.sceneProcessorReasoningHistory.push(ctx.sceneProcessorReasoning);
+      this.gameState.storyHistory.push({ kind: 'event', turn: this.gameState.turnCount, text: ctx.sceneProcessorOutcome, reasoning: ctx.sceneProcessorReasoning || undefined });
+    }
+    this.gameState.turnCount++;
+  }
+
   async processTurn(playerAction: PlayerAction): Promise<TurnResult> {
     this.saveCheckpoint(playerAction);
     await this.sceneManager.ensureInitialized();
 
-    const sceneState = this.sceneManager.getCurrentState();
-    const lastSceneProcessorOutcome =
-      this.gameState.sceneProcessorHistory.at(-1) ?? this.gameState.worldConfig.initialScene;
-    const playerActionNullable = playerAction.type === 'skip' ? null : playerAction;
-
-    const npcOutputs: NpcOutput[] = [];
-    const sceneProcessorOutcome = { value: '' };
-    const sceneProcessorReasoning = { value: '' };
-    const narrative = { value: '' };
-
-    const pipeline = this.buildPipeline(
-      playerActionNullable,
-      sceneState,
-      lastSceneProcessorOutcome,
-      npcOutputs,
-      sceneProcessorOutcome,
-      sceneProcessorReasoning,
-      narrative,
-    );
+    const ctx = this.createTurnContext(playerAction);
+    const pipeline = this.buildPipeline(ctx);
 
     for (const step of pipeline) {
       await step.execute();
     }
 
-    this.gameState.narrativeHistory.push(narrative.value);
-    if (playerAction.type === 'observe') {
-      this.gameState.storyHistory.push({ kind: 'observation', turn: this.gameState.turnCount, text: sceneProcessorOutcome.value });
-    } else {
-      this.gameState.sceneProcessorHistory.push(sceneProcessorOutcome.value);
-      this.gameState.sceneProcessorReasoningHistory.push(sceneProcessorReasoning.value);
-      this.gameState.storyHistory.push({ kind: 'event', turn: this.gameState.turnCount, text: sceneProcessorOutcome.value, reasoning: sceneProcessorReasoning.value || undefined });
-    }
-    this.gameState.turnCount++;
-
-    return { narrative: narrative.value, npcOutputs };
+    this.commitTurn(playerAction, ctx);
+    return { narrative: ctx.narrative, npcOutputs: ctx.npcOutputs };
   }
 
   /**
@@ -392,25 +411,8 @@ export class Orchestrator {
     this.saveCheckpoint(playerAction);
     await this.sceneManager.ensureInitialized();
 
-    const sceneState = this.sceneManager.getCurrentState();
-    const lastSceneProcessorOutcome =
-      this.gameState.sceneProcessorHistory.at(-1) ?? this.gameState.worldConfig.initialScene;
-    const playerActionNullable = playerAction.type === 'skip' ? null : playerAction;
-
-    const npcOutputs: NpcOutput[] = [];
-    const sceneProcessorOutcome = { value: '' };
-    const sceneProcessorReasoning = { value: '' };
-    const narrative = { value: '' };
-
-    const pipeline = this.buildPipeline(
-      playerActionNullable,
-      sceneState,
-      lastSceneProcessorOutcome,
-      npcOutputs,
-      sceneProcessorOutcome,
-      sceneProcessorReasoning,
-      narrative,
-    );
+    const ctx = this.createTurnContext(playerAction);
+    const pipeline = this.buildPipeline(ctx);
 
     for (const step of pipeline) {
       yield { type: 'step:start', displayName: step.displayName };
@@ -426,20 +428,12 @@ export class Orchestrator {
       yield { type: 'step:done', displayName: step.displayName };
     }
 
-    this.gameState.narrativeHistory.push(narrative.value);
-    if (playerAction.type === 'observe') {
-      this.gameState.storyHistory.push({ kind: 'observation', turn: this.gameState.turnCount, text: sceneProcessorOutcome.value });
-    } else {
-      this.gameState.sceneProcessorHistory.push(sceneProcessorOutcome.value);
-      this.gameState.sceneProcessorReasoningHistory.push(sceneProcessorReasoning.value);
-      this.gameState.storyHistory.push({ kind: 'event', turn: this.gameState.turnCount, text: sceneProcessorOutcome.value, reasoning: sceneProcessorReasoning.value || undefined });
-    }
-    this.gameState.turnCount++;
+    this.commitTurn(playerAction, ctx);
 
     const doneEvent: TurnDoneEvent = {
       type: 'done',
-      narrative: narrative.value,
-      npcOutputs,
+      narrative: ctx.narrative,
+      npcOutputs: ctx.npcOutputs,
       sceneState: this.sceneManager.getCurrentState(),
       storyHistory: [...this.gameState.storyHistory],
     };

@@ -20,13 +20,10 @@ Engine-internal types (ILlmClient, PipelineStep, NpcConfig, NpcState, GameState,
 re-exported. API response shapes (`GameStateSnapshot`, `StoryListResponse`) have been moved
 to `engine/src/types.ts` and are used in `index.ts` to enforce the wire contract at compile time.
 
-### H2 — Turn loop & commit logic duplicated in the Orchestrator
-`processTurn` and `processTurnStream` share `buildPipeline` but each re-implement the
-iterate-then-commit logic (history push, `turnCount++`).
-- (a) ◐ New per-turn state must be wired in two places; easy to update one and forget the other.
-- (b) ⬤ Agents must diff two near-identical blocks to find the intended change.
-- **Fix direction:** have the blocking path consume the streaming generator, or factor a single
-  `runPipeline`/`commitTurn` helper.
+### H2 — Turn loop & commit logic duplicated in the Orchestrator ✅ RESOLVED
+`processTurn` and `processTurnStream` now share `createTurnContext()` and `commitTurn()`
+helpers. Both methods set up context, run the pipeline, then call `commitTurn` — the
+history-push and `turnCount++` logic lives in exactly one place.
 
 ### H3 — SSE parsing duplicated in the API client
 `sendActionStream` and `retryActionStream` in `ui/src/api.ts` contain identical reader/decode/
@@ -46,15 +43,13 @@ contradicting the "tunables go in `constants.ts`" convention.
 
 ## Medium severity
 
-### M1 — "Isolated" steps actually communicate via shared mutable state
-`buildPipeline` passes a long list of mutable boxes (`{ value: string }`), a live `npcOutputs`
-array, and a getter, captured by closures. Steps claim to be decoupled but in practice share
-Orchestrator-owned mutable state.
-- (a) ◐ Adding/reordering steps requires understanding the implicit produce/consume timing.
-- (b) ⬤ The indirection (boxes, getter reading "current" value) is non-obvious and costly to
-  reason about safely.
-- **Fix direction:** flow typed outputs through a per-turn context object passed step→step, or
-  let each step return its output and have the loop thread it forward.
+### M1 — "Isolated" steps actually communicate via shared mutable state ✅ RESOLVED
+The mutable `{ value: string }` boxes, the live `npcOutputs` array, and the deferred
+`sceneProcessorOutcome` getter have been replaced by a single `TurnContext` interface.
+`buildPipeline` now accepts one `ctx: TurnContext` parameter; each step reads its inputs
+and writes its outputs through `ctx` fields with clearly named types. Produce/consume
+ordering is still sequential but is now documented by the field names rather than hidden
+by box indirection.
 
 ### M2 — Parser contracts split between prompts and processors ✅ RESOLVED
 `NPC_ACTIONS_SEPARATOR` (`#ACTIONS#`) and `SCENE_OUTCOME_SEPARATOR` (`#OUTCOME#`) are now
