@@ -44,10 +44,12 @@ export class SessionLoader {
         name: npc.name,
         character: npc.character,
         traits: [...npc.traits],
-        goals: [...npc.goals],
       },
       mind: {
         thoughts: npc.initialMindset,
+        mood: '',
+        goals: [...npc.goals],
+        agenda: [],
         lastActions: [],
       },
     }));

@@ -8,6 +8,8 @@ interface DebugPanelProps {
   storyHistory: StoryHistoryEntry[];
   isOpen: boolean;
   onToggle: () => void;
+  onSave: () => void;
+  onLoad: () => void;
 }
 
 /**
@@ -21,7 +23,7 @@ interface DebugPanelProps {
  *   - "Состояние" — current SceneManager state
  *   - "История" — chronological SceneProcessor factual outcomes
  */
-export function DebugPanel({ data, sceneState, storyHistory, isOpen, onToggle }: DebugPanelProps) {
+export function DebugPanel({ data, sceneState, storyHistory, isOpen, onToggle, onSave, onLoad }: DebugPanelProps) {
   const [selectedNpcId, setSelectedNpcId] = useState<string | null>(null);
   const [sceneTab, setSceneTab] = useState<'state' | 'history'>('state');
 
@@ -40,7 +42,17 @@ export function DebugPanel({ data, sceneState, storyHistory, isOpen, onToggle }:
 
       {isOpen && (
         <aside className="debug-panel" aria-label="NPC debug panel">
-          <div className="debug-panel__header">ОТЛАДКА НПС</div>
+          <div className="debug-panel__header">
+            <span>ОТЛАДКА НПС</span>
+            <div className="debug-panel__save-controls">
+              <button className="debug-panel__save-btn" onClick={onSave} title="Сохранить игру">
+                СОХРАНИТЬ
+              </button>
+              <button className="debug-panel__save-btn" onClick={onLoad} title="Загрузить игру">
+                ЗАГРУЗИТЬ
+              </button>
+            </div>
+          </div>
 
           {data.length === 0 ? (
             <p className="debug-panel__empty">Ходов пока нет.</p>
@@ -73,12 +85,41 @@ export function DebugPanel({ data, sceneState, storyHistory, isOpen, onToggle }:
                       <div className="debug-step__section-label">Мысли</div>
                       <pre className="debug-step__text">{step.thoughts}</pre>
 
+                      <div className="debug-step__section-label">Состояние</div>
+                      <pre className="debug-step__text">{step.mood || '—'}</pre>
+
                       <div className="debug-step__section-label">Действия</div>
-                      <ul className="debug-step__actions">
-                        {step.actions.map((a, j) => (
-                          <li key={j}>{a}</li>
-                        ))}
-                      </ul>
+                      {step.actions.length > 0 ? (
+                        <ul className="debug-step__actions">
+                          {step.actions.map((a, j) => (
+                            <li key={j}>{a}</li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="debug-step__empty-list">нет физических действий</p>
+                      )}
+
+                      <div className="debug-step__section-label">Речь</div>
+                      {step.speech.length > 0 ? (
+                        <ul className="debug-step__actions">
+                          {step.speech.map((s, j) => (
+                            <li key={j}>«{s}»</li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="debug-step__empty-list">молчит</p>
+                      )}
+
+                      {step.agenda.length > 0 && (
+                        <>
+                          <div className="debug-step__section-label">Планы</div>
+                          <ul className="debug-step__actions">
+                            {step.agenda.map((s, j) => (
+                              <li key={j}>{s}</li>
+                            ))}
+                          </ul>
+                        </>
+                      )}
                     </div>
                   ))}
                 </div>

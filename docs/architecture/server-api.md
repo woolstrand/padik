@@ -23,6 +23,9 @@ session rebuilds the orchestrator (awaiting the loader), discarding all prior ga
 the `state` and `session/start` responses. Constants come from `constants.ts`; never hardcode
 config here.
 
+A single `SaveManager` instance is created at startup with path
+`userdata/saves/` and shared across all endpoints.
+
 ## Story discovery & safety
 
 - Stories live in `userdata/stories/<id>/`; a valid folder has `world.json` and at least one
@@ -45,6 +48,8 @@ config here.
 | `GET /api/stories` | List valid stories + selected id. |
 | `POST /api/session/start` | Switch story, rebuild orchestrator, return fresh snapshot. |
 | `GET /api/debug` | Per-NPC debug data (see [debug.md](debug.md)). |
+| `POST /api/save` | Save current session for the active story (one slot per story). Returns `{ ok: true }`. |
+| `POST /api/load` | Restore a previously saved session for the active story. Returns `GameStateSnapshot`. |
 
 ## Conventions
 

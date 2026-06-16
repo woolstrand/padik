@@ -17,6 +17,7 @@ import {
   NpcDebugData,
   NpcInnerState,
   NpcOutput,
+  OrchestratorSaveData,
   PlayerAction,
   StoryHistoryEntry,
   TurnDoneEvent,
@@ -189,9 +190,10 @@ export class Orchestrator {
         displayName: npcStep.displayName,
         execute: async () => {
           const innerState = this.npcStateManager.get(npcId);
-          const otherNpcActions = ctx.npcOutputs.map(
-            (o) => `${o.npcName}: ${o.actions.join(', ')}`,
-          );
+          const otherNpcActions = ctx.npcOutputs.map((o) => {
+            const combined = [...o.actions, ...o.speech];
+            return `${o.npcName}: ${combined.join(', ')}`;
+          });
           const output = await npcStep.execute({
             innerState,
             world: this.gameState.world,
@@ -209,8 +211,18 @@ export class Orchestrator {
             ctx.playerAction,
             output.thoughts,
             output.actions,
+            output.speech,
+            output.updatedMood,
+            output.updatedAgenda,
           );
-          this.npcStateManager.updateMind(npcId, output.thoughts, output.actions);
+          this.npcStateManager.updateMind(
+            npcId,
+            output.thoughts,
+            output.actions,
+            output.updatedMood,
+            output.updatedAgenda,
+            output.updatedGoals,
+          );
         },
       });
     }
@@ -460,5 +472,44 @@ export class Orchestrator {
 
   getDebugData(): NpcDebugData[] {
     return this.debugHelper.getAll();
+  }
+
+  /**
+   * Export all mutable session state for persistence.
+   * The Orchestrator provides data only — serialization is handled externally.
+   */
+  exportSaveData(): OrchestratorSaveData {
+    return {
+      gameState: {
+        narrativeHistory: [...this.gameState.narrativeHistory],
+        sceneProcessorHistory: [...this.gameState.sceneProcessorHistory],
+        sceneProcessorReasoningHistory: [...this.gameState.sceneProcessorReasoningHistory],
+        storyHistory: [...this.gameState.storyHistory],
+        world: this.gameState.world,
+        turnCount: this.gameState.turnCount,
+      },
+      sceneState: this.sceneManager.getCurrentState(),
+      npcStates: Object.fromEntries(this.npcStateManager.snapshot()),
+      lastPlayerAction: this.lastPlayerAction,
+    };
+  }
+
+  /**
+   * Restore mutable session state from previously exported data.
+   * The world (WorldRuntime) is not replaced — the loaded story must match
+   * the currently running one.
+   */
+  importSaveData(data: OrchestratorSaveData): void {
+    this.gameState.narrativeHistory = [...data.gameState.narrativeHistory];
+    this.gameState.sceneProcessorHistory = [...data.gameState.sceneProcessorHistory];
+    this.gameState.sceneProcessorReasoningHistory = [...data.gameState.sceneProcessorReasoningHistory];
+    this.gameState.storyHistory = [...data.gameState.storyHistory];
+    this.gameState.turnCount = data.gameState.turnCount;
+    this.sceneManager.restoreState(data.sceneState);
+    this.npcStateManager.restore(new Map(Object.entries(data.npcStates)));
+    this.lastPlayerAction = data.lastPlayerAction;
+    // A loaded save replaces the checkpoint; clear it so retry is unavailable.
+    this.checkpoint = null;
+    this.debugHelper.rollbackToTurn(data.gameState.turnCount);
   }
 }

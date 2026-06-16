@@ -45,6 +45,32 @@
   padding: 0.6rem 1rem;
   border-bottom: 1px solid var(--color-border);
   flex-shrink: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.debug-panel__save-controls {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.debug-panel__save-btn {
+  background: none;
+  border: 1px solid var(--color-border);
+  color: var(--color-muted);
+  font-family: inherit;
+  font-size: 0.62rem;
+  letter-spacing: 0.12em;
+  padding: 0.2rem 0.5rem;
+  cursor: pointer;
+  border-radius: 2px;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.debug-panel__save-btn:hover {
+  color: var(--color-accent);
+  border-color: var(--color-accent);
 }
 
 .debug-panel__empty {

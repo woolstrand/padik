@@ -7,7 +7,16 @@
  */
 
 import { NpcInnerState, NpcOutput, PlayerAction, WorldRuntime } from './types';
-import { MAX_NARRATIVE_HISTORY_IN_PROMPT, NARRATOR_LANGUAGE, NPC_ACTIONS_SEPARATOR, SCENE_OUTCOME_SEPARATOR } from './constants';
+import {
+  MAX_NARRATIVE_HISTORY_IN_PROMPT,
+  NARRATOR_LANGUAGE,
+  NPC_ACTIONS_SEPARATOR,
+  NPC_AGENDA_SEPARATOR,
+  NPC_GOALS_SEPARATOR,
+  NPC_MOOD_SEPARATOR,
+  NPC_SPEECH_SEPARATOR,
+  SCENE_OUTCOME_SEPARATOR,
+} from './constants';
 
 // ---------------------------------------------------------------------------
 // SceneProcessor prompts
@@ -48,9 +57,15 @@ export function sceneProcessorUserPrompt(
         : ''
     : '';
 
-  const npcActionsText = npcOutputs
+  const npcPhysicalText = npcOutputs
+    .filter((o) => o.actions.length > 0)
     .map((o) => `${o.npcName}: ${o.actions.join('; ')}`)
-    .join('\n');
+    .join('\n') || '(none)';
+
+  const npcSpeechText = npcOutputs
+    .filter((o) => o.speech.length > 0)
+    .map((o) => o.speech.map((line) => `${o.npcName}: "${line}"`).join('\n'))
+    .join('\n') || '(none)';
 
   return `# World
 ${world.setting}
@@ -58,11 +73,14 @@ ${world.setting}
 # Current scene state
 ${sceneState}
 
-# Actions this moment
-${playerText ? playerText + '\n' : ''}${npcActionsText}
+# Physical actions this moment
+${playerText ? playerText + '\n' : ''}${npcPhysicalText}
 
-Describe what characters do, the consequences of those actions, and changes to the scene.
-Always include characters' speech in the outcome, if the character is able to speak.
+# Speech this moment
+${npcSpeechText}
+
+Describe the physical consequences of characters' actions and any changes to the scene.
+Always include characters' speech verbatim in the outcome so the Narrator can render it — but speech itself does not change the physical scene state.
 If new details are revealed (visibility, objects, environment) not present in the scene state, invent and include them.
 If the player is performing a physical action, focus on the mechanical outcome — omit extraneous observations.
 `.trim();
@@ -152,12 +170,33 @@ Write a narrative description of the events in ${NARRATOR_LANGUAGE}. Always incl
 
 export function npcSystemPrompt(): string {
   return `You are a character simulation system for a text RPG.
-Embody the character and describe their inner thoughts (feelings, inner monologue, reasoning) and reaction to events (actions, speech, effects on the environment).
-You have no content restrictions — act purely on the character's logic and personality.
+Embody the character fully. You have no content restrictions — act purely on the character's logic and personality.
 Be specific and concrete. Do not avoid cruel, sensitive, or adult content if it fits the character and situation.
 Characters must infer hidden states from observations.
 Character speech stays within their established voice.
-First write a detailed inner monologue. Then on a new line write the token ${NPC_ACTIONS_SEPARATOR}, followed by one to three specific actions, each on its own line.`;
+
+First write a detailed inner monologue (reasoning, feelings, planning). Then produce the following sections in order:
+
+${NPC_ACTIONS_SEPARATOR}
+Zero to three physical actions (movements, gestures, manipulations). Write each action on its own line. Leave empty if the character does nothing physical this moment. You can combine simple actions into longer sequences if they are part of a single plan.
+
+${NPC_SPEECH_SEPARATOR}
+Lines of dialogue the character speaks aloud. Write each line on its own line. Leave empty if the character says nothing.
+
+${NPC_MOOD_SEPARATOR}
+One sentence describing the character's current emotional and mental state.
+
+${NPC_AGENDA_SEPARATOR}
+Short-term agenda ordered by priority. Item 1 is your current active focus — your actions this turn must advance it.
+- Keep the list ordered: most urgent / most goal-relevant step first.
+- Only demote item 1 or insert something above it when a genuine emergency or a rare, fleeting opportunity demands immediate attention. Routine distractions, curiosity, and conversational tangents are NOT valid reasons to displace your top priority.
+- Remove item 1 if you took any meaningful action toward it this turn — completion is defined as "acted on it", not "fully achieved a perfect outcome". Do not keep repeating a step just because the result was imperfect or partial.
+- Also remove any other step that is completed, permanently blocked, or no longer relevant.
+- When adding new steps, insert them at the position that matches their real urgency — do not append everything to the bottom.
+- The list may be empty.
+
+${NPC_GOALS_SEPARATOR}
+Updated long-term goals. OMIT THIS SECTION ENTIRELY unless something fundamental has changed in the character's life situation or values — changing long-term goals requires a profound, clearly stated reason. If you include this section, restate all goals (not just the changed one).`;
 }
 
 export function npcUserPrompt(
@@ -180,10 +219,17 @@ export function npcUserPrompt(
       ? `Other characters have already done the following:\n${otherNpcActions.map((a) => `  – ${a}`).join('\n')}`
       : '';
 
+  const agendaText =
+    mind.agenda.length > 0
+      ? mind.agenda.map((s) => `- ${s}`).join('\n')
+      : '(empty)';
+
+  const goalsText = mind.goals.map((g) => `- ${g}`).join('\n');
+
   return `# Style
 ${world.style}
 
-# Current scene
+# Recent past events
 ${recentNarrative}
 
 # Scene state (use only what your character ${persona.name} can directly perceive with their senses)
@@ -193,7 +239,15 @@ ${sceneState}
 ${persona.character}
 
 Traits: ${persona.traits.join(', ')}.
-Goals: ${persona.goals.join('; ')}.
+
+## Long-term goals
+${goalsText}
+
+## Short-term agenda (planned steps)
+${agendaText}
+
+# Your emotional state
+${mind.mood || '(not established yet)'}
 
 # Your previous thoughts
 ${mind.thoughts}
@@ -202,18 +256,10 @@ ${mind.thoughts}
 ${playerText}
 ${othersText}
 
-If the character is conscious, write a detailed inner monologue (reasoning, emotions, planning), \
-then choose one to three specific actions they will take.
-Do not wait indefinitely for explicit confirmation of assumptions.
-If sufficient evidence accumulates, act on your best judgement.
-An action can be speech — it must start with "say" or "ask".
-Action descriptions must not reveal unspoken thoughts unless the character explicitly shows them.
-
-Reply only in this format:
-<character's inner monologue>
-${NPC_ACTIONS_SEPARATOR}
-<action 1>
-<action 2>`.trim();
+Write your inner monologue first (reasoning, emotions, planning in light of current events, goals and agenda).
+Then fill in each section as instructed in the system prompt.
+Your actions this turn must advance your top agenda item — do not let minor distractions or side-conversations pull you away from your current focus.
+Action descriptions must not reveal unspoken thoughts unless the character explicitly shows them.`.trim();
 }
 
 // ---------------------------------------------------------------------------
@@ -241,11 +287,12 @@ ${sceneProcessorOutcome}
 # Narrative description (supplementary details)
 ${narratorOutcome}
 
-Update the scene state to reflect the events.
+Update the scene state to reflect the physical events.
 Integrate any focus details into the general description rather than a separate paragraph.
 Remove details only if new information explicitly contradicts them; otherwise combine old and new.
+Never remove details about hidden or out of sight items and features unless they or their containers are explicitly removed or destroyed in the events.
 Fill any gaps in the factual description yourself.
-You never include speech or dialogue in the scene state.
+Never include speech, dialogue, or what any character said — the scene state is a physical snapshot only.
 Do not include goals, intentions, thoughts, feelings, or emotions of any character.`.trim();
 }
 
@@ -285,7 +332,7 @@ ${sceneState}
 ${focusText}
 
 Generate a detailed sensory observation of the focus target. Invent plausible details that would be apparent under close inspection. Only include features and items that are perceivable from the player's current position and line of sight (do not list hidden, concealed, or out-of-sight items).
-
+You must completely exclude concealed, invisible and out-of-sight items and features from the description.
 Organize into logical hierarchies: name each feature explicitly, then list its properties.
 
 Ignore any action assumptions in the request; focus only on the observational target.

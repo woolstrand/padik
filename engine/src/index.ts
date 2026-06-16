@@ -9,12 +9,14 @@ import { SceneProcessor } from './engine/SceneProcessor';
 import { ObservationProcessor } from './engine/ObservationProcessor';
 import { SessionLoader } from './engine/SessionLoader';
 import { Orchestrator } from './engine/Orchestrator';
+import { SaveManager } from './engine/SaveManager';
 import {
   DEFAULT_STORY_ID,
   LLM_BASE_URL,
   LLM_MAX_TOKENS,
   LLM_MODEL,
   LLM_TEMPERATURE,
+  SAVES_DIR,
   SERVER_PORT,
   STORIES_DIR,
   STORY_SELECTION_FILE,
@@ -152,6 +154,9 @@ function buildSnapshot(): GameStateSnapshot {
 // Composition root: wire up all dependencies here
 let currentStoryId: string;
 let orchestrator: Orchestrator;
+
+const savesRoot = path.join(path.resolve(__dirname, '..', '..'), USERDATA_DIR, SAVES_DIR);
+const saveManager = new SaveManager(savesRoot);
 
 const app = express();
 app.use(cors());
@@ -308,6 +313,46 @@ app.post('/api/session/start', async (req: Request, res: Response) => {
 app.get('/api/debug', (_req: Request, res: Response) => {
   res.json(orchestrator.getDebugData());
 });
+
+/**
+ * POST /api/save
+ * Saves the current session state for the active story.
+ * One save slot per story; overwrites any previous save.
+ */
+app.post('/api/save', (_req: Request, res: Response) => {
+  try {
+    saveManager.save(currentStoryId, orchestrator.exportSaveData());
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Error saving session:', err);
+    res.status(500).json({ error: 'Failed to save session.' });
+  }
+});
+
+/**
+ * POST /api/load
+ * Restores a previously saved session for the active story.
+ * Returns the updated GameStateSnapshot so the UI can refresh.
+ */
+app.post('/api/load', (_req: Request, res: Response) => {
+  if (!saveManager.hasSave(currentStoryId)) {
+    res.status(404).json({ error: `No save found for story "${currentStoryId}".` });
+    return;
+  }
+  try {
+    const snapshot = saveManager.load(currentStoryId);
+    if (snapshot.storyId !== currentStoryId) {
+      res.status(400).json({ error: 'Save file story id does not match current story.' });
+      return;
+    }
+    orchestrator.importSaveData(snapshot);
+    res.json(buildSnapshot());
+  } catch (err) {
+    console.error('Error loading session:', err);
+    res.status(500).json({ error: 'Failed to load session.' });
+  }
+});
+
 
 async function bootstrap(): Promise<void> {
   fs.mkdirSync(storiesRoot, { recursive: true });

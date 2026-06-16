@@ -40,7 +40,7 @@ ${playerDescription}
 # Characters (physical appearance)
 ${npcDescriptions}
 
-Write a brief factual description of the initial scene state.
+Write a factual description of the initial scene state. All information above must be included in the initial setup, even if it is not immediately perceivable.
 Include each character's position, pose, and physical condition; important objects; and notable environmental details.
 Do not include goals, intentions, thoughts, or feelings.`.trim();
 }

@@ -134,3 +134,20 @@ export async function startSession(storyId: string): Promise<GameStateSnapshot> 
   }
   return res.json() as Promise<GameStateSnapshot>;
 }
+
+export async function saveGame(): Promise<void> {
+  const res = await fetch(`${API_BASE}/save`, { method: 'POST' });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`POST /api/save failed (${res.status}): ${body}`);
+  }
+}
+
+export async function loadGame(): Promise<GameStateSnapshot> {
+  const res = await fetch(`${API_BASE}/load`, { method: 'POST' });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`POST /api/load failed (${res.status}): ${body}`);
+  }
+  return res.json() as Promise<GameStateSnapshot>;
+}

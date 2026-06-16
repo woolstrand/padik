@@ -18,7 +18,10 @@ export class NpcDebugHelper {
    * @param recentNarrative  The narrative shown to the NPC as context
    * @param playerAction  The player action (or null for skip)
    * @param thoughts      The NPC's output thoughts
-   * @param actions       The NPC's output actions
+   * @param actions       The NPC's physical actions
+   * @param speech        The NPC's spoken lines
+   * @param mood          Updated emotional state
+   * @param agenda        Updated short-term agenda
    */
   record(
     npcId: string,
@@ -28,6 +31,9 @@ export class NpcDebugHelper {
     playerAction: PlayerAction | null,
     thoughts: string,
     actions: string[],
+    speech: string[],
+    mood: string,
+    agenda: string[],
   ): void {
     if (!this.data.has(npcId)) {
       this.data.set(npcId, { npcId, npcName, steps: [] });
@@ -41,7 +47,7 @@ export class NpcDebugHelper {
 
     const situation = `Сцена:\n${recentNarrative}\n\nДействие игрока: ${playerText}`;
 
-    const step: NpcDebugStep = { turn, situation, thoughts, actions };
+    const step: NpcDebugStep = { turn, situation, thoughts, actions, speech, mood, agenda };
     this.data.get(npcId)!.steps.push(step);
   }
 

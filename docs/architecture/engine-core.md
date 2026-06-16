@@ -24,6 +24,7 @@ wires steps together.
 | File | Role |
 |------|------|
 | `engine/src/engine/Orchestrator.ts` | State owner, pipeline builder, turn loop, checkpoints |
+| `engine/src/engine/SaveManager.ts` | Reads/writes per-story JSON save files in `userdata/saves/` |
 | `engine/src/engine/NpcStateManager.ts` | Owns NPC inner state (persona + mind); turn order |
 | `engine/src/engine/steps/NpcStep.ts` | One bound NPC per instance → `NpcOutput` |
 | `engine/src/engine/steps/SceneProcessorStep.ts` | Player + NPC actions → factual outcome |
@@ -93,6 +94,16 @@ duplicate the loop/commit logic — keep them consistent when editing.
   `NpcStateManager` (`restore`), and the `SceneStateManager` state.
 
 Only one checkpoint (the most recent turn) is retained — retry/cancel are single-level.
+
+## Save / restore
+
+- `exportSaveData()` returns an `OrchestratorSaveData` snapshot of all mutable session state:
+  `gameState`, `sceneState`, NPC states (as a plain `Record` for JSON safety), and
+  `lastPlayerAction`.
+- `importSaveData(data)` overwrites all mutable state from the provided snapshot, clears the
+  checkpoint (retry is unavailable after a load), and rolls back `NpcDebugHelper`.
+- The `SaveManager` (`engine/src/engine/SaveManager.ts`) handles disk I/O: one JSON file per
+  story in `userdata/saves/<storyId>.json`. The Orchestrator is not aware of the file system.
 
 ## Gotchas
 

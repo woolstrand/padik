@@ -36,9 +36,22 @@ export class NpcStateManager {
   }
 
   /** Replace an NPC's mutable mind after it has acted this turn. */
-  updateMind(npcId: string, thoughts: string, lastActions: string[]): void {
+  updateMind(
+    npcId: string,
+    thoughts: string,
+    lastActions: string[],
+    updatedMood: string,
+    updatedAgenda: string[],
+    updatedGoals?: string[],
+  ): void {
     const state = this.get(npcId);
-    state.mind = { thoughts, lastActions: [...lastActions] };
+    state.mind = {
+      thoughts,
+      mood: updatedMood || state.mind.mood,
+      goals: updatedGoals ?? state.mind.goals,
+      agenda: [...updatedAgenda],
+      lastActions: [...lastActions],
+    };
   }
 
   /** Deep-ish copy of all inner states, for checkpointing. */
@@ -61,6 +74,12 @@ export class NpcStateManager {
 function cloneInnerState(state: NpcInnerState): NpcInnerState {
   return {
     persona: state.persona,
-    mind: { thoughts: state.mind.thoughts, lastActions: [...state.mind.lastActions] },
+    mind: {
+      thoughts: state.mind.thoughts,
+      mood: state.mind.mood,
+      goals: [...state.mind.goals],
+      agenda: [...state.mind.agenda],
+      lastActions: [...state.mind.lastActions],
+    },
   };
 }

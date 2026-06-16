@@ -10,6 +10,7 @@ export const SERVER_PORT = 3001;
 
 export const USERDATA_DIR = 'userdata';
 export const STORIES_DIR = 'stories';
+export const SAVES_DIR = 'saves';
 export const STORY_SELECTION_FILE = 'selected-story.json';
 export const WORLD_FILE = 'world.json';
 export const DEFAULT_STORY_ID = 'padik';
@@ -23,8 +24,20 @@ export const NARRATOR_LANGUAGE = 'Russian';
 // the parsers in NpcProcessor / SceneProcessor.
 // ---------------------------------------------------------------------------
 
-/** Separates NPC inner monologue from the actions block in NPC responses. */
+/** Separates NPC inner monologue from the physical actions block in NPC responses. */
 export const NPC_ACTIONS_SEPARATOR = '#ACTIONS#';
+
+/** Separates the speech / dialogue block from physical actions in NPC responses. */
+export const NPC_SPEECH_SEPARATOR = '#SPEECH#';
+
+/** Marks the start of the updated emotional state block in NPC responses. */
+export const NPC_MOOD_SEPARATOR = '#MOOD#';
+
+/** Marks the start of the updated short-term agenda block in NPC responses. */
+export const NPC_AGENDA_SEPARATOR = '#AGENDA#';
+
+/** Marks the start of an updated long-term goals block in NPC responses (rarely present). */
+export const NPC_GOALS_SEPARATOR = '#GOALS#';
 
 /** Separates SceneProcessor reasoning from the factual outcome (used when reasoning is enabled). */
 export const SCENE_OUTCOME_SEPARATOR = '#OUTCOME#';

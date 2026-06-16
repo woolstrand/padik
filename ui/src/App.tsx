@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { NarratorOutput } from './components/NarratorOutput';
 import { PlayerInput } from './components/PlayerInput';
 import { DebugPanel } from './components/DebugPanel';
-import { fetchInitialState, fetchStories, sendActionStream, fetchDebugData, startSession, retryActionStream, cancelTurn } from './api';
+import { fetchInitialState, fetchStories, sendActionStream, fetchDebugData, startSession, retryActionStream, cancelTurn, saveGame, loadGame } from './api';
 import { NpcDebugData, StoryInfo, ChatEntry, StoryHistoryEntry } from './types';
 import './App.css';
 
@@ -187,6 +187,39 @@ export function App() {
     abortControllerRef.current?.abort();
   }
 
+  async function handleSave() {
+    try {
+      await saveGame();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(`Ошибка сохранения: ${msg}`);
+    }
+  }
+
+  async function handleLoad() {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const state = await loadGame();
+      const entries: ChatEntry[] =
+        state.narrativeHistory.length > 0
+          ? state.narrativeHistory.map((text) => ({ type: 'narrative' as const, text }))
+          : [{ type: 'narrative' as const, text: state.opening }];
+      setChatEntries(entries);
+      setSceneState(state.sceneState ?? '');
+      setStoryHistory(state.storyHistory ?? []);
+      setHasLastTurn(false);
+      setDebugData([]);
+      setStreamingEntry(undefined);
+      setProgressMessage(undefined);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(`Ошибка загрузки: ${msg}`);
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
   return (
     <div className={`app-root${isDebugOpen ? ' app-root--debug-open' : ''}`}>
       <div className="app-layout">
@@ -254,6 +287,8 @@ export function App() {
         storyHistory={storyHistory}
         isOpen={isDebugOpen}
         onToggle={() => setIsDebugOpen((v) => !v)}
+        onSave={() => void handleSave()}
+        onLoad={() => void handleLoad()}
       />
     </div>
   );
