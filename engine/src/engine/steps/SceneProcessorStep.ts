@@ -6,6 +6,9 @@ export interface SceneProcessorStepInput {
   sceneState: string;
   playerAction: PlayerAction | null;
   npcOutputs: NpcOutput[];
+  passiveTurnCount: number;
+  playerIsPassive: boolean;
+  normalizedPlayerAction: string;
 }
 
 /**
@@ -25,6 +28,9 @@ export class SceneProcessorStep implements PipelineStep<SceneProcessorStepInput,
       input.sceneState,
       input.playerAction,
       input.npcOutputs,
+      input.passiveTurnCount,
+      input.playerIsPassive,
+      input.normalizedPlayerAction,
     );
   }
 }

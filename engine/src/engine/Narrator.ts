@@ -17,12 +17,13 @@ export class Narrator {
     sceneState: string,
     sceneProcessorOutcome: string,
     mode: NarratorMode = 'event',
+    isPassiveTurn = false,
   ): Promise<string> {
     const messages = [
       { role: 'system' as const, content: narratorSystemPrompt(mode) },
       {
         role: 'user' as const,
-        content: narratorUserPrompt(worldConfig, narrativeHistory, sceneState, sceneProcessorOutcome, mode),
+        content: narratorUserPrompt(worldConfig, narrativeHistory, sceneState, sceneProcessorOutcome, mode, isPassiveTurn),
       },
     ];
 
@@ -35,12 +36,13 @@ export class Narrator {
     sceneState: string,
     sceneProcessorOutcome: string,
     mode: NarratorMode = 'event',
+    isPassiveTurn = false,
   ): AsyncIterable<string> {
     const messages = [
       { role: 'system' as const, content: narratorSystemPrompt(mode) },
       {
         role: 'user' as const,
-        content: narratorUserPrompt(worldConfig, narrativeHistory, sceneState, sceneProcessorOutcome, mode),
+        content: narratorUserPrompt(worldConfig, narrativeHistory, sceneState, sceneProcessorOutcome, mode, isPassiveTurn),
       },
     ];
 

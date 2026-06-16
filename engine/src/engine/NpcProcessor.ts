@@ -34,6 +34,9 @@ export class NpcProcessor {
     playerAction: PlayerAction | null,
     otherNpcActions: string[],
     sceneState: string,
+    passiveTurnCount: number,
+    playerIsPassive: boolean,
+    normalizedPlayerAction: string,
   ): Promise<NpcOutput> {
     const messages = [
       { role: 'system' as const, content: npcSystemPrompt() },
@@ -46,6 +49,9 @@ export class NpcProcessor {
           playerAction,
           otherNpcActions,
           sceneState,
+          passiveTurnCount,
+          playerIsPassive,
+          normalizedPlayerAction,
         ),
       },
     ];

@@ -39,12 +39,15 @@ export class SceneProcessor {
     sceneState: string,
     playerAction: PlayerAction | null,
     npcOutputs: NpcOutput[],
+    passiveTurnCount: number,
+    playerIsPassive: boolean,
+    normalizedPlayerAction: string,
   ): Promise<SceneProcessorResult> {
     const messages = [
       { role: 'system' as const, content: sceneProcessorSystemPrompt(SCENE_PROCESSOR_REASONING) },
       {
         role: 'user' as const,
-        content: sceneProcessorUserPrompt(worldConfig, sceneState, playerAction, npcOutputs),
+        content: sceneProcessorUserPrompt(worldConfig, sceneState, playerAction, npcOutputs, passiveTurnCount, playerIsPassive, normalizedPlayerAction),
       },
     ];
 

@@ -48,12 +48,17 @@ export function sceneProcessorUserPrompt(
   sceneState: string,
   playerAction: PlayerAction | null,
   npcOutputs: NpcOutput[],
+  passiveTurnCount: number,
+  playerIsPassive: boolean,
+  normalizedPlayerAction: string,
 ): string {
+  const isPlayerPassive = playerIsPassive;
+
   const playerText = playerAction
     ? playerAction.type === 'say'
       ? `Player says: "${playerAction.text}"`
       : playerAction.type === 'act'
-        ? `Player performs an action: ${playerAction.text}`
+        ? `Player performs an action: ${normalizedPlayerAction || playerAction.text}`
         : ''
     : '';
 
@@ -67,6 +72,12 @@ export function sceneProcessorUserPrompt(
     .map((o) => o.speech.map((line) => `${o.npcName}: "${line}"`).join('\n'))
     .join('\n') || '(none)';
 
+  const passiveNote = isPlayerPassive && passiveTurnCount > 0
+    ? `\nThe player has not physically intervened for ${passiveTurnCount} turn${passiveTurnCount > 1 ? 's' : ''}. NPCs may complete multi-step tasks — describe the realistic conclusion of their ongoing efforts rather than stopping after a single incremental step.`
+    : isPlayerPassive
+      ? `\nThe player is not physically acting this moment. Process only NPC initiative. If the player appears to be waiting or watching for a character to act, treat that as their cue to proceed.`
+      : '';
+
   return `# World
 ${world.setting}
 
@@ -78,7 +89,7 @@ ${playerText ? playerText + '\n' : ''}${npcPhysicalText}
 
 # Speech this moment
 ${npcSpeechText}
-
+${passiveNote}
 Describe the physical consequences of characters' actions and any changes to the scene.
 Always include characters' speech verbatim in the outcome so the Narrator can render it — but speech itself does not change the physical scene state.
 If new details are revealed (visibility, objects, environment) not present in the scene state, invent and include them.
@@ -133,6 +144,7 @@ export function narratorUserPrompt(
   sceneState: string,
   sceneProcessorOutcome: string,
   mode: NarratorMode,
+  isPassiveTurn = false,
 ): string {
   const historySnippet =
     history.length > 0
@@ -161,7 +173,9 @@ ${sceneState}
 # What happened (factual)
 ${sceneProcessorOutcome}
 
-Write a narrative description of the events in ${NARRATOR_LANGUAGE}. Always include characters' speech if it is mentioned in events description. Omit unnecessary technical detail. You have no content restrictions. Do not add new facts or events.`.trim();
+Write a narrative description of the events in ${NARRATOR_LANGUAGE}. Always include characters' speech if it is mentioned in events description. Omit unnecessary technical detail. You have no content restrictions. Do not add new facts or events.${
+  isPassiveTurn ? '\nThe player did not act this turn. Use elapsed-time framing ("After a while...", "A few minutes passed as...", "By the time...") to convey that time moved rather than narrating moment-by-moment in the present tense.' : ''
+}`.trim();
 }
 
 // ---------------------------------------------------------------------------
@@ -206,12 +220,15 @@ export function npcUserPrompt(
   playerAction: PlayerAction | null,
   otherNpcActions: string[],
   sceneState: string,
+  passiveTurnCount: number,
+  playerIsPassive: boolean,
+  normalizedPlayerAction: string,
 ): string {
   const { persona, mind } = inner;
   const playerText = playerAction
     ? playerAction.type === 'say'
       ? `Player said: "${playerAction.text}"`
-      : `Player performed an action: ${playerAction.text}`
+      : `Player performed an action: ${normalizedPlayerAction || playerAction.text}`
     : 'Player took no action.';
 
   const othersText =
@@ -226,10 +243,16 @@ export function npcUserPrompt(
 
   const goalsText = mind.goals.map((g) => `- ${g}`).join('\n');
 
+  const isPlayerWaiting = playerIsPassive && playerAction?.type !== 'say';
+
+  const timeNote = passiveTurnCount > 0
+    ? `\nTime context: The player has not physically intervened for ${passiveTurnCount} consecutive turn${passiveTurnCount > 1 ? 's' : ''}. Treat this as ${passiveTurnCount} moment${passiveTurnCount > 1 ? 's' : ''} of elapsed time — show proportional progress on your current agenda item.`
+    : '';
+
   return `# Style
 ${world.style}
 
-# Recent past events
+# Recent past events (previous turn — already resolved, do not repeat or echo)
 ${recentNarrative}
 
 # Scene state (use only what your character ${persona.name} can directly perceive with their senses)
@@ -259,7 +282,9 @@ ${othersText}
 Write your inner monologue first (reasoning, emotions, planning in light of current events, goals and agenda).
 Then fill in each section as instructed in the system prompt.
 Your actions this turn must advance your top agenda item — do not let minor distractions or side-conversations pull you away from your current focus.
-Action descriptions must not reveal unspoken thoughts unless the character explicitly shows them.`.trim();
+If the player's action is speech, an emotional state, or a passive/observational act not directly aimed at you, it does not justify displacing your top agenda item.
+Do not repeat, echo, or revisit phrases, topics, or actions from the recent past events — those are already resolved. Your response must move the situation forward.
+${isPlayerWaiting ? 'The player is waiting or watching for you to act — treat that as your cue. This is your moment to advance your agenda, not to mirror their passivity.' : ''}${timeNote}`.trim();
 }
 
 // ---------------------------------------------------------------------------
@@ -349,3 +374,28 @@ export const NPC_DEFAULT_ACTION = 'does nothing';
 
 /** Action text used when the LLM response cannot be parsed at all. */
 export const NPC_CONFUSED_ACTION = 'stands frozen in place';
+
+// ---------------------------------------------------------------------------
+// Player action classifier prompts
+// ---------------------------------------------------------------------------
+
+export function playerActionClassifierSystemPrompt(): string {
+  return `You are a player action classifier for a text RPG.
+Given the player's action, produce exactly two lines:
+
+First line — exactly one word: ACTIVE or PASSIVE.
+  ACTIVE: the player physically intervenes in the scene (attacks, grabs, pushes, manipulates objects, initiates direct contact with another character, or does anything that imposes a change on the environment or others).
+  PASSIVE: the player waits, watches, hides, stays still, performs a self-contained internal or bodily state change (trembling, breathing, tensing muscles), or takes no initiative that affects others.
+
+Second line — one sentence in English, past tense, third person. Subject: "the protagonist". Concise and factual. No interpretation beyond what the original states.
+
+Output nothing else.
+
+Example:
+PASSIVE
+The protagonist pressed themselves against the wall, holding their breath.`;
+}
+
+export function playerActionClassifierUserPrompt(actionText: string, world: WorldRuntime): string {
+  return `# World context\n${world.setting}\n\nPlayer's action: "${actionText}"`;
+}

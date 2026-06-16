@@ -8,6 +8,9 @@ export interface NpcStepInput {
   playerAction: PlayerAction | null;
   otherNpcActions: string[];
   sceneState: string;
+  passiveTurnCount: number;
+  playerIsPassive: boolean;
+  normalizedPlayerAction: string;
 }
 
 /**
@@ -30,6 +33,9 @@ export class NpcStep implements PipelineStep<NpcStepInput, NpcOutput> {
       input.playerAction,
       input.otherNpcActions,
       input.sceneState,
+      input.passiveTurnCount,
+      input.playerIsPassive,
+      input.normalizedPlayerAction,
     );
   }
 }

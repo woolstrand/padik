@@ -160,6 +160,8 @@ export interface GameState {
   storyHistory: StoryHistoryEntry[];
   world: WorldRuntime;
   turnCount: number;
+  /** Consecutive turns since the player last took a physical action (type 'act'). Resets to 0 on 'act'. */
+  passiveTurnCount: number;
 }
 
 export interface StoryInfo {

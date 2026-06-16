@@ -5,11 +5,13 @@ import { SceneProcessor } from './SceneProcessor';
 import { SceneStateManager } from './SceneManager';
 import { NpcStateManager } from './NpcStateManager';
 import { ObservationProcessor } from './ObservationProcessor';
+import { PlayerActionInterpreter } from './PlayerActionInterpreter';
 import { NpcStep } from './steps/NpcStep';
 import { NarrateStep } from './steps/NarrateStep';
 import { SceneProcessorStep } from './steps/SceneProcessorStep';
 import { SceneUpdateStep } from './steps/SceneUpdateStep';
 import { ObserveStep } from './steps/ObserveStep';
+import { PlayerIntentStep } from './steps/PlayerIntentStep';
 import {
   EngineInitialState,
   GameState,
@@ -56,6 +58,10 @@ interface TurnContext {
   sceneProcessorOutcome: string;
   sceneProcessorReasoning: string;
   narrative: string;
+  /** Set by PlayerIntentStep: true when the player is not physically intervening. */
+  playerIsPassive: boolean;
+  /** Set by PlayerIntentStep: English past-tense third-person restatement of the player act. Empty for say/skip/observe. */
+  normalizedPlayerAction: string;
 }
 
 /**
@@ -90,6 +96,7 @@ export class Orchestrator {
   private readonly narrateStep: NarrateStep;
   private readonly sceneUpdateStep: SceneUpdateStep;
   private readonly observeStep: ObserveStep;
+  private readonly playerIntentStep: PlayerIntentStep;
 
   private lastPlayerAction: PlayerAction | null = null;
   private checkpoint: {
@@ -100,6 +107,7 @@ export class Orchestrator {
     npcStates: Map<string, NpcInnerState>;
     turnCount: number;
     sceneState: string;
+    passiveTurnCount: number;
   } | null = null;
 
   constructor(
@@ -117,6 +125,7 @@ export class Orchestrator {
       storyHistory: [],
       world: initialState.world,
       turnCount: 0,
+      passiveTurnCount: 0,
     };
 
     this.opening = initialState.opening;
@@ -133,6 +142,7 @@ export class Orchestrator {
     this.narrateStep = new NarrateStep(narrator);
     this.sceneUpdateStep = new SceneUpdateStep(this.sceneManager);
     this.observeStep = new ObserveStep(observationProcessor);
+    this.playerIntentStep = new PlayerIntentStep(new PlayerActionInterpreter(llmClient));
   }
 
   private saveCheckpoint(action: PlayerAction): void {
@@ -145,6 +155,7 @@ export class Orchestrator {
       npcStates: this.npcStateManager.snapshot(),
       turnCount: this.gameState.turnCount,
       sceneState: this.sceneManager.getCurrentState(),
+      passiveTurnCount: this.gameState.passiveTurnCount,
     };
   }
 
@@ -156,6 +167,7 @@ export class Orchestrator {
     this.gameState.storyHistory = [...this.checkpoint.storyHistory];
     this.npcStateManager.restore(this.checkpoint.npcStates);
     this.gameState.turnCount = this.checkpoint.turnCount;
+    this.gameState.passiveTurnCount = this.checkpoint.passiveTurnCount;
     this.debugHelper.rollbackToTurn(this.checkpoint.turnCount);
     this.sceneManager.restoreState(this.checkpoint.sceneState);
   }
@@ -181,6 +193,23 @@ export class Orchestrator {
     }
     const steps: BoundStep[] = [];
 
+    // ── Player intent classification ─────────────────────────────────────────
+    // Runs first so all subsequent steps can use ctx.playerIsPassive.
+    const playerIntentStep = this.playerIntentStep;
+    const worldForIntent = this.gameState.world;
+    steps.push({
+      displayName: playerIntentStep.displayName,
+      execute: async () => {
+        ctx.playerIsPassive = await playerIntentStep.execute({
+          playerAction: ctx.playerAction,
+          world: worldForIntent,
+        }).then((result) => {
+          ctx.normalizedPlayerAction = result.normalizedAction;
+          return result.isPassive;
+        });
+      },
+    });
+
     // ── NPC steps (sequential so each sees prior NPCs' actions this turn) ───
     // NPCs receive the SceneProcessor outcome from the previous turn as their
     // "recent events" context — more factual and useful than narrator prose.
@@ -201,6 +230,9 @@ export class Orchestrator {
             playerAction: ctx.playerAction,
             otherNpcActions,
             sceneState: ctx.sceneState,
+            passiveTurnCount: this.gameState.passiveTurnCount,
+            playerIsPassive: ctx.playerIsPassive,
+            normalizedPlayerAction: ctx.normalizedPlayerAction,
           });
           ctx.npcOutputs.push(output);
           this.debugHelper.record(
@@ -239,6 +271,9 @@ export class Orchestrator {
           sceneState: ctx.sceneState,
           playerAction: ctx.playerAction,
           npcOutputs: ctx.npcOutputs,
+          passiveTurnCount: this.gameState.passiveTurnCount,
+          playerIsPassive: ctx.playerIsPassive,
+          normalizedPlayerAction: ctx.normalizedPlayerAction,
         });
         ctx.sceneProcessorOutcome = result.outcome;
         ctx.sceneProcessorReasoning = result.reasoning ?? '';
@@ -260,6 +295,7 @@ export class Orchestrator {
           sceneState: ctx.sceneState,
           mode: 'event' as const,
           sceneProcessorOutcome: ctx.sceneProcessorOutcome,
+          isPassiveTurn: ctx.playerIsPassive,
         });
       },
       async *executeStream() {
@@ -269,6 +305,7 @@ export class Orchestrator {
           sceneState: ctx.sceneState,
           mode: 'event' as const,
           sceneProcessorOutcome: ctx.sceneProcessorOutcome,
+          isPassiveTurn: ctx.playerIsPassive,
         })) {
           ctx.narrative += token;
           yield token;
@@ -329,6 +366,7 @@ export class Orchestrator {
           sceneState: ctx.sceneState,
           mode: 'observation' as const,
           sceneProcessorOutcome: ctx.sceneProcessorOutcome,
+          isPassiveTurn: false,
         });
       },
       async *executeStream() {
@@ -338,6 +376,7 @@ export class Orchestrator {
           sceneState: ctx.sceneState,
           mode: 'observation' as const,
           sceneProcessorOutcome: ctx.sceneProcessorOutcome,
+          isPassiveTurn: false,
         })) {
           ctx.narrative += token;
           yield token;
@@ -371,6 +410,8 @@ export class Orchestrator {
       sceneProcessorOutcome: '',
       sceneProcessorReasoning: '',
       narrative: '',
+      playerIsPassive: true, // default; overwritten by PlayerIntentStep before NPCs run
+      normalizedPlayerAction: '', // default; overwritten by PlayerIntentStep before NPCs run
     };
   }
 
@@ -384,6 +425,11 @@ export class Orchestrator {
       this.gameState.storyHistory.push({ kind: 'event', turn: this.gameState.turnCount, text: ctx.sceneProcessorOutcome, reasoning: ctx.sceneProcessorReasoning || undefined });
     }
     this.gameState.turnCount++;
+    if (!ctx.playerIsPassive) {
+      this.gameState.passiveTurnCount = 0;
+    } else {
+      this.gameState.passiveTurnCount++;
+    }
   }
 
   async processTurn(playerAction: PlayerAction): Promise<TurnResult> {
@@ -487,6 +533,7 @@ export class Orchestrator {
         storyHistory: [...this.gameState.storyHistory],
         world: this.gameState.world,
         turnCount: this.gameState.turnCount,
+        passiveTurnCount: this.gameState.passiveTurnCount,
       },
       sceneState: this.sceneManager.getCurrentState(),
       npcStates: Object.fromEntries(this.npcStateManager.snapshot()),

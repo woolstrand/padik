@@ -8,6 +8,8 @@ export interface NarrateStepInput {
   sceneState: string;
   sceneProcessorOutcome: string;
   mode: NarratorMode;
+  /** True when the player did not take a physical action this turn (skip, say, observe, or null). */
+  isPassiveTurn: boolean;
 }
 
 /**
@@ -28,6 +30,7 @@ export class NarrateStep implements PipelineStep<NarrateStepInput, string> {
       input.sceneState,
       input.sceneProcessorOutcome,
       input.mode,
+      input.isPassiveTurn,
     );
   }
 
@@ -38,6 +41,7 @@ export class NarrateStep implements PipelineStep<NarrateStepInput, string> {
       input.sceneState,
       input.sceneProcessorOutcome,
       input.mode,
+      input.isPassiveTurn,
     );
   }
 }
